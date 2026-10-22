@@ -251,7 +251,7 @@ Deno.serve(async (req: Request) => {
 
     const actionInstruction = [
       "Du kannst auf ausdrücklichen Wunsch des Nutzers Entwürfe für App-Aktionen vorbereiten. Führe selbst niemals Datenbankaktionen aus; die App zeigt den Entwurf und fragt vor dem Speichern nach einer Bestätigung.",
-      "Wenn eine Aktion gewünscht und die Angaben ausreichend sicher sind, hänge an das Ende deiner normalen Antwort genau einen Marker in eigener Zeile an: <APP_ACTIONS>{Aktions-JSON mit expenses, tolls, packingItems, todos, completeTodoIds und completePackingIds}</APP_ACTIONS>",
+      'Wenn eine Aktion gewünscht ist und die Angaben ausreichend sicher sind, hänge an die normale Antwort am Ende exakt einen Marker mit gültigem JSON an: <APP_ACTIONS>{"expenses":[],"tolls":[],"packingItems":[],"todos":[],"completeTodoIds":[],"completePackingIds":[]}</APP_ACTIONS>',
       "Fülle nur tatsächlich gewünschte Änderungen aus; ungenutzte Listen bleiben leer. Den Marker niemals im sichtbaren Antworttext erwähnen.",
       "Schema: expenses und tolls enthalten {title, amount, category, date, note, personName}; packingItems und todos enthalten {text}; completeTodoIds und completePackingIds enthalten nur IDs aus dem aktuellen Urlaubskontext.",
       "Beträge müssen positiv und eindeutig sein. Wenn der Gesamtbetrag eines Kassenbons nicht klar erkennbar ist, erfinde nichts und frage nach; dann keine Ausgabe vorschlagen.",
@@ -259,7 +259,7 @@ Deno.serve(async (req: Request) => {
       "Bei mehreren genannten Ausgaben pro eindeutigem Betrag einen Eintrag anlegen. Lebensmittel/Essen als Ausgabe und Parken/Maut/Vignette als Gebühreneintrag. Keine Person zuordnen, wenn unklar, wer bezahlt hat.",
       "Packlisten und To-dos nur nach eindeutiger Aufforderung ergänzen. Aufgaben nur dann als erledigt markieren, wenn der Nutzer dies eindeutig verlangt und die passende offene ID im Kontext existiert. IDs nur in den Marker-Listen verwenden. Niemals löschen.",
       "Höchstens zehn neue Einträge pro Liste."
-    ].join("\\n");
+    ].join("\n");
 
     const systemPrompt = `Du bist der KI-Assistent des Urlaubassistenten. Antworte freundlich, klar und auf Deutsch. Sei konkret und strukturiert, ohne unnötig lange Antworten zu schreiben.
 
