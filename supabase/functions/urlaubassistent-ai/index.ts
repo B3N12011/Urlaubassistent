@@ -194,12 +194,13 @@ ${JSON.stringify(context, null, 2)}`;
       temperature: 0.45,
     };
     if (webSearchRequested) {
+      // One server-tool turn maximum: keep live-search spend predictable.
+      requestBody.max_tool_calls = 1;
       requestBody.tools = [{
         type: "openrouter:web_search",
         parameters: {
           engine: "parallel",
           max_results: 3,
-          max_uses: 1,
           max_total_results: 3,
           search_context_size: "low",
         },
