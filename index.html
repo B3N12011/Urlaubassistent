@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="manifest.json?v=4" />
+  <link rel="manifest" href="manifest.json?v=5" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -2553,7 +2553,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=4").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=5").catch(() => {});
     }, { once: true });
   }
 
