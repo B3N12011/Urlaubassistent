@@ -11,6 +11,7 @@ const corsHeaders = {
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const USER_DAILY_LIMIT = 10;
 const GLOBAL_DAILY_LIMIT = 45;
+const PAID_WEB_SEARCH_ENABLED = false;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: corsHeaders });
@@ -215,9 +216,11 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Das Kassenbonbild ist zu groß oder hat ein nicht unterstütztes Format. Bitte fotografiere den Bon erneut.", code: "AI_RECEIPT_IMAGE_INVALID" }, 400);
     }
     const webSearchEligible = !hasReceiptImage && wantsWebSearch(latestQuestion);
-    const webSearchEnabled = body.webSearchEnabled === true;
+    const webSearchEnabled = PAID_WEB_SEARCH_ENABLED && body.webSearchEnabled === true;
     let webSearchRequested = webSearchEnabled && webSearchEligible;
-    let webSearchBlockedReason = webSearchEligible && !webSearchEnabled ? "OFF" : "";
+    let webSearchBlockedReason = webSearchEligible && !webSearchEnabled
+      ? (PAID_WEB_SEARCH_ENABLED ? "OFF" : "FEATURE_DISABLED")
+      : "";
     let searchQuotaInfo: { remaining: number; globalRemaining: number; userLimit: number; globalLimit: number } | null = null;
 
     if (webSearchRequested) {
