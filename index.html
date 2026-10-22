@@ -1371,8 +1371,8 @@
         },
         recentExpenses: trip.expenses.slice(-12).map(e => ({title:e.title, amount:e.amount, category:e.category, date:e.date, note:e.note || ""})),
         recentTolls: trip.tolls.slice(-8).map(e => ({title:e.title, amount:e.amount, date:e.date, note:e.note || ""})),
-        openTodos: trip.todos.filter(x=>!x.done).slice(0,20).map(x=>({id:x.id,text:x.text})),
-        openPacking: trip.packlist.filter(x=>!x.done).slice(0,20).map(x=>({id:x.id,text:x.text})),
+        openTodos: trip.todos.filter(x=>!x.done).slice(0,20).map((x,i)=>({id:"todo-"+(i+1),text:x.text})),
+        openPacking: trip.packlist.filter(x=>!x.done).slice(0,20).map((x,i)=>({id:"packing-"+(i+1),text:x.text})),
         customCategories: customExpenseCategories(trip)
       },
       availableTrips,
@@ -1846,10 +1846,10 @@
     if(!actions||!trip){aiError="Bitte wähle zuerst einen Urlaub aus.";render();return;}
     if(!session?.user?.id){aiError="Bitte melde dich an, um Änderungen zu speichern.";render();return;}
     if(trip.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    const todoIds=new Set(trip.todos.filter(item=>!item.done).map(item=>String(item.id)));
-    const packingIds=new Set(trip.packlist.filter(item=>!item.done).map(item=>String(item.id)));
-    const completeTodoIds=actions.completeTodoIds.filter(id=>todoIds.has(String(id)));
-    const completePackingIds=actions.completePackingIds.filter(id=>packingIds.has(String(id)));
+    const openTodos=trip.todos.filter(item=>!item.done).slice(0,20);
+    const openPacking=trip.packlist.filter(item=>!item.done).slice(0,20);
+    const completeTodoIds=actions.completeTodoIds.map(key=>{const match=/^todo-(\\d+)$/.exec(String(key));return match?openTodos[Number(match[1])-1]?.id:null;}).filter(Boolean);
+    const completePackingIds=actions.completePackingIds.map(key=>{const match=/^packing-(\\d+)$/.exec(String(key));return match?openPacking[Number(match[1])-1]?.id:null;}).filter(Boolean);
     const expenses=actions.expenses.map(item=>{
       const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
       return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Sonstiges")||"Sonstiges",person_id:person?.id||null,note:item.note||"",expense_date:item.date||iso()};
@@ -1860,12 +1860,12 @@
     });
     const counts={expenses:0,tolls:0,packing:0,todos:0,doneTodos:0,donePacking:0};aiActionsApplying=true;aiError="";render();
     try{
-      if(expenses.length){const {error:e}=await supabase.from("trip_expenses").insert(expenses);if(e)throw e;counts.expenses=expenses.length;addActivity(trip.id,"hat "+expenses.length+" KI-Ausgabe(n) eingetragen","receipt-text");}
-      if(tolls.length){const {error:e}=await supabase.from("trip_tolls").insert(tolls);if(e)throw e;counts.tolls=tolls.length;addActivity(trip.id,"hat "+tolls.length+" KI-Gebühreneintrag/-einträge eingetragen","car-front");}
-      if(actions.packingItems.length){const rows=actions.packingItems.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_pack_items").insert(rows);if(e)throw e;counts.packing=rows.length;addActivity(trip.id,"hat "+rows.length+" KI-Packlistenpunkt(e) hinzugefügt","luggage");}
-      if(actions.todos.length){const rows=actions.todos.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_todos").insert(rows);if(e)throw e;counts.todos=rows.length;addActivity(trip.id,"hat "+rows.length+" KI-To-do(s) hinzugefügt","list-checks");}
-      if(completeTodoIds.length){const {error:e}=await supabase.from("trip_todos").update({done:true}).in("id",completeTodoIds).eq("trip_id",trip.id);if(e)throw e;counts.doneTodos=completeTodoIds.length;}
-      if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;}
+      if(expenses.length){const {error:e}=await supabase.from("trip_expenses").insert(expenses);if(e)throw e;counts.expenses=expenses.length;message.actions.expenses=[];addActivity(trip.id,"hat "+expenses.length+" KI-Ausgabe(n) eingetragen","receipt-text");}
+      if(tolls.length){const {error:e}=await supabase.from("trip_tolls").insert(tolls);if(e)throw e;counts.tolls=tolls.length;message.actions.tolls=[];addActivity(trip.id,"hat "+tolls.length+" KI-Gebühreneintrag/-einträge eingetragen","car-front");}
+      if(actions.packingItems.length){const rows=actions.packingItems.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_pack_items").insert(rows);if(e)throw e;counts.packing=rows.length;message.actions.packingItems=[];addActivity(trip.id,"hat "+rows.length+" KI-Packlistenpunkt(e) hinzugefügt","luggage");}
+      if(actions.todos.length){const rows=actions.todos.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_todos").insert(rows);if(e)throw e;counts.todos=rows.length;message.actions.todos=[];addActivity(trip.id,"hat "+rows.length+" KI-To-do(s) hinzugefügt","list-checks");}
+      if(completeTodoIds.length){const {error:e}=await supabase.from("trip_todos").update({done:true}).in("id",completeTodoIds).eq("trip_id",trip.id);if(e)throw e;counts.doneTodos=completeTodoIds.length;message.actions.completeTodoIds=[];}
+      if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;message.actions.completePackingIds=[];}
       message.actions=null;message.actionsApplied=true;await loadTrips();
       const saved=[];if(counts.expenses)saved.push(counts.expenses+" "+(counts.expenses===1?"Ausgabe":"Ausgaben"));if(counts.tolls)saved.push(counts.tolls+" Gebühreneinträge");if(counts.packing)saved.push(counts.packing+" Packlistenpunkte");if(counts.todos)saved.push(counts.todos+" To-dos");if(counts.doneTodos)saved.push(counts.doneTodos+" To-dos abgehakt");if(counts.donePacking)saved.push(counts.donePacking+" Packlistenpunkte abgehakt");
       aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];render();
