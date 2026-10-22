@@ -139,6 +139,18 @@
     .ai-source-domain { margin-top: 3px; font-size: 10px; font-weight: 600; color: #2563eb; }
     .ai-source-snippet { margin-top: 4px; font-size: 10px; line-height: 1.45; color: #64748b; }
     .ai-source-heading { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .ai-recommendation-card {
+      margin: .85rem 0; padding: 14px; border: 1px solid rgba(96,165,250,.24);
+      border-radius: 18px; background: linear-gradient(145deg, #ffffff, #f8fbff);
+      box-shadow: 0 5px 18px rgba(15,23,42,.035), inset 0 1px 0 #fff;
+    }
+    .ai-recommendation-card h3 { margin-top: 0 !important; padding-bottom: 8px; border-bottom: 1px solid #eaf0f7; }
+    .ai-recommendation-card > :last-child { margin-bottom: 0; }
+    .ai-web-search-note { margin-top: 10px; padding: 9px 11px; border-radius: 12px; background: #f1f5f9; color: #64748b; font-size: 10px; line-height: 1.5; }
+    .ai-web-search-note.is-limited { background: #fff7ed; color: #9a3412; }
+    .ai-followups { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+    .ai-followup-chip { border: 1px solid #dbeafe; background: #f8fbff; color: #1d4ed8; border-radius: 999px; padding: 7px 10px; font-size: 10px; font-weight: 700; line-height: 1.35; text-align: left; transition: background .15s ease, border-color .15s ease; }
+    .ai-followup-chip:hover { background: #eff6ff; border-color: #93c5fd; }
     .ai-markdown { color: #334155; overflow-wrap: anywhere; line-height: 1.72; }
     .ai-markdown p { margin: 0 0 .8rem; }
     .ai-markdown p:last-child { margin-bottom: 0; }
@@ -182,7 +194,8 @@
     activityPrefix: "urlaubassistent-activity-",
     checklistPrefix: "urlaubassistent-trip-check-",
     reminderSentPrefix: "urlaubassistent-reminder-sent-",
-    customExpenseCategoriesPrefix: "urlaubassistent-custom-expense-categories-"
+    customExpenseCategoriesPrefix: "urlaubassistent-custom-expense-categories-",
+    aiWebSearchEnabled: "urlaubassistent-ai-web-search-enabled"
   };
 
   const LIST_LIMIT = 5;
@@ -216,6 +229,8 @@
   let aiInput = "";
   let aiError = "";
   let aiQuotaRemaining = null;
+  let aiSearchQuotaRemaining = null;
+  let aiWebSearchEnabled = localStorage.getItem(K.aiWebSearchEnabled) === "true";
   let aiThinkingTimer = null;
   let aiThinkingStatus = "Ich schaue mir deinen Urlaub an";
   let aiMessages = [
@@ -1302,6 +1317,19 @@
       const category = String(e.category || "Sonstiges");
       currentCategoryTotals[category] = (currentCategoryTotals[category] || 0) + Number(e.amount || 0);
     });
+    const budget = Number(trip.budget || 0);
+    const peopleCount = Math.max(1, (trip.people || []).length);
+    const dayMs = 86400000;
+    const todayMs = new Date(iso() + "T12:00:00").getTime();
+    const startMs = trip.startDate ? new Date(trip.startDate + "T12:00:00").getTime() : NaN;
+    const endMs = trip.endDate ? new Date(trip.endDate + "T12:00:00").getTime() : NaN;
+    const plannedDays = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+      ? Math.floor((endMs - startMs) / dayMs) + 1 : null;
+    const remainingTripDays = Number.isFinite(endMs) && endMs >= todayMs
+      ? Math.floor((endMs - todayMs) / dayMs) + 1 : 0;
+    const elapsedTripDays = Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+      ? Math.max(1, Math.min(plannedDays, Math.floor((Math.min(todayMs, endMs) - startMs) / dayMs) + 1)) : null;
+    const remainingBudget = budget - total;
 
     return {
       account: { name: actorName() },
@@ -1315,13 +1343,25 @@
         people: trip.people.map(p => p.name),
         spending: {
           total,
-          remaining: Number(trip.budget || 0) - total,
+          remaining: remainingBudget,
           expenseCount: trip.expenses.length,
           tollCount: trip.tolls.length,
           categoryTotals: Object.entries(currentCategoryTotals)
             .sort((a,b) => Number(b[1]) - Number(a[1]))
             .slice(0, 8)
             .map(([category, amount]) => ({ category, amount: Number(amount) }))
+        },
+        budgetCoach: {
+          peopleCount,
+          plannedDays,
+          elapsedTripDays,
+          remainingTripDays,
+          spentPerPerson: total / peopleCount,
+          remainingPerPerson: remainingBudget / peopleCount,
+          spendingPerElapsedDay: elapsedTripDays ? total / elapsedTripDays : null,
+          suggestedDailyLimit: remainingTripDays > 0 ? remainingBudget / remainingTripDays : null,
+          usedPercent: budget > 0 ? (total / budget) * 100 : null,
+          isOverBudget: budget > 0 && total > budget
         },
         recentExpenses: trip.expenses.slice(-12).map(e => ({title:e.title, amount:e.amount, category:e.category, date:e.date, note:e.note || ""})),
         recentTolls: trip.tolls.slice(-8).map(e => ({title:e.title, amount:e.amount, date:e.date, note:e.note || ""})),
@@ -1337,9 +1377,9 @@
   function aiQuickPromptsHTML() {
     const prompts = [
       "Finde 3 Reiseziele passend zu meinem Budget",
-      "Vergleiche meine bisherigen Urlaube",
+      "Wie viel kann ich pro Tag noch ausgeben?",
       "Wo können wir bei Ausgaben am meisten sparen?",
-      "Plane einen Urlaub für mein Budget"
+      "Vergleiche meine bisherigen Urlaube"
     ];
     return `<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">${prompts.map((prompt,i)=>`
       <button type="button" data-action="ai-prompt" data-prompt="${esc(prompt)}" class="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/80 hover:text-blue-800">${icon(["map-pinned","chart-no-axes-combined","piggy-bank","calendar-check"][i],"h-4 w-4 text-blue-700")}<span class="ml-2 align-middle">${esc(prompt)}</span></button>`).join("")}</div>`;
@@ -1367,6 +1407,7 @@
     let paragraph = [];
     let list = null;
     let quote = [];
+    let recommendationCardOpen = false;
 
     const flushParagraph = () => {
       if (!paragraph.length) return;
@@ -1396,7 +1437,13 @@
       if (heading) {
         flushBlocks();
         const level = heading[1].length <= 3 ? 3 : 4;
-        out.push("<h" + level + ">" + aiMarkdownInline(heading[2]) + "</h" + level + ">");
+        if (level === 3) {
+          if (recommendationCardOpen) out.push("</section>");
+          out.push('<section class="ai-recommendation-card"><h3>' + aiMarkdownInline(heading[2]) + "</h3>");
+          recommendationCardOpen = true;
+        } else {
+          out.push("<h4>" + aiMarkdownInline(heading[2]) + "</h4>");
+        }
         continue;
       }
       if (/^(---+|___+)\s*$/.test(line)) {
@@ -1426,7 +1473,54 @@
       paragraph.push(line);
     }
     flushBlocks();
+    if (recommendationCardOpen) out.push("</section>");
     return out.join("");
+  }
+
+  function aiFollowUpsFor(question) {
+    const q = String(question || "").toLowerCase();
+    if (/(reiseziel|reiseziele|wohin|urlaubsideen|reiseideen|reisevorschlag|plane.*urlaub|urlaub.*plan)/i.test(q)) {
+      return [
+        "Vergleiche die Kosten der Ziele",
+        "Welches Ziel passt am besten zu 14 Tagen?",
+        "Erstelle einen konkreten Reiseplan"
+      ];
+    }
+    if (/(ausgab|kosten|budget|spar|teuer|geld|ausgegeben|vergleichen)/i.test(q)) {
+      return [
+        "Wie viel kann ich pro Tag noch ausgeben?",
+        "Welche Kategorie ist am teuersten?",
+        "Zeige mir 3 konkrete Spartipps"
+      ];
+    }
+    return [
+      "Passe den Vorschlag an mein Budget an",
+      "Mach mir einen Schritt-für-Schritt-Plan",
+      "Welche Angaben fehlen noch?"
+    ];
+  }
+
+  function aiFollowUpsHTML(followUps) {
+    const items = (Array.isArray(followUps) ? followUps : []).slice(0, 3);
+    if (!items.length) return "";
+    return '<div class="ai-followups">' + items.map(prompt =>
+      '<button type="button" class="ai-followup-chip" data-action="ai-followup" data-prompt="' + esc(prompt) + '">' + icon("corner-down-right","mr-1 inline-block h-3 w-3") + esc(prompt) + '</button>'
+    ).join("") + '</div>';
+  }
+
+  function aiWebSearchNoticeHTML(message) {
+    const reason = String(message?.webSearchBlockedReason || "");
+    if (!message?.webSearchEligible || message?.webSearchRequested) return "";
+    if (reason === "DAILY_LIMIT") {
+      return '<div class="ai-web-search-note is-limited">Kostenbremse aktiv: Das Websuch-Limit ist erreicht. Diese Antwort verwendet keine Live-Webquellen.</div>';
+    }
+    if (reason === "COST_GUARD") {
+      return '<div class="ai-web-search-note is-limited">Kostenbremse aktiv: Die Suchfreigabe konnte nicht sicher geprüft werden. Es wurde keine kostenpflichtige Websuche gestartet.</div>';
+    }
+    if (reason === "OFF") {
+      return '<div class="ai-web-search-note">Sparmodus: Für diese Frage wurden keine Live-Webquellen verwendet. Du kannst die optionale Websuche oben einschalten.</div>';
+    }
+    return "";
   }
 
   function aiSourcesHTML(sources, webSearchRequested = false) {
@@ -1468,9 +1562,10 @@
     if (!aiOpen) {
       return `<button type="button" data-action="toggle-ai" aria-label="Urlaubassistent KI öffnen" class="fixed bottom-[5.75rem] right-4 z-[90] flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-white/70 bg-white/78 text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.92)_inset] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/90 active:scale-95 sm:bottom-24 sm:right-6">${icon("sparkles","h-6 w-6")}</button>`;
     }
-    const bubbles = aiMessages.map(m => m.role === "user"
+    const showFollowUpsIndex = aiMessages.length && aiMessages[aiMessages.length - 1].role === "assistant" ? aiMessages.length - 1 : -1;
+    const bubbles = aiMessages.map((m, messageIndex) => m.role === "user"
       ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
-      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}</div></div>`
+      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}${aiWebSearchNoticeHTML(m)}${messageIndex === showFollowUpsIndex ? aiFollowUpsHTML(m.followUps) : ""}</div></div>`
     ).join("");
     return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
       <div class="pointer-events-auto absolute bottom-0 right-0 flex h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10 sm:bottom-24 sm:right-6 sm:h-[min(720px,82vh)] sm:rounded-[2rem]">
@@ -1482,7 +1577,16 @@
             </div>
             <button type="button" data-action="toggle-ai" aria-label="KI schließen" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-5 w-5")}</button>
           </div>
-          <div class="mt-3 flex items-center gap-2 text-xs text-white/60"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${activeTrip()?`Aktiver Urlaub: ${esc(activeTrip().name)}`:"Noch kein Urlaub ausgewählt"}</div>
+          <div class="mt-3 flex items-center gap-2 text-xs text-white/60"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${activeTrip()? `Aktiver Urlaub: ${esc(activeTrip().name)}` : "Noch kein Urlaub ausgewählt"}</div>
+          <div class="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 text-xs font-bold text-white/90">${icon("shield-check","h-4 w-4 text-emerald-300")} Websuche · optional</div>
+              <div class="mt-1 text-[11px] leading-4 text-white/60">${aiWebSearchEnabled ? "Aktiv · aktuell 0,005 US-$ je Suche" : "Sparmodus aktiv · keine Suchkosten"}</div>
+              <div class="mt-1 text-[10px] leading-4 text-white/45">${aiSearchQuotaRemaining === null ? "Höchstens 3 Suchanfragen pro Nutzer und 10 insgesamt pro Tag." : `Noch ${aiSearchQuotaRemaining} Websuchen für dich heute · serverseitiges Tageslimit`}</div>
+            </div>
+            <button type="button" data-action="toggle-ai-web-search" aria-pressed="${aiWebSearchEnabled ? "true" : "false"}" class="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${aiWebSearchEnabled ? "bg-blue-500 text-white" : "bg-white/10 text-white/80 hover:bg-white/15"}"><span class="h-2 w-2 rounded-full ${aiWebSearchEnabled ? "bg-white" : "bg-slate-400"}"></span>${aiWebSearchEnabled ? "AN" : "AUS"}</button>
+          </div>
+          <div class="mt-2 text-[10px] leading-4 text-white/45">Ohne Websuche nutzt die KI deine Urlaubsdaten und ihr Modellwissen. Aktuelle Preise und Verfügbarkeiten werden dann nicht live geprüft.</div>
         </div>
 
         <div id="ai-chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
@@ -1582,7 +1686,7 @@
     render();
     try {
       const context = aiContext();
-      const payload = { messages: aiMessages.slice(-12), context };
+      const payload = { messages: aiMessages.slice(-12), context, webSearchEnabled: aiWebSearchEnabled };
       const result = await supabase.functions.invoke("urlaubassistent-ai", { body: payload });
       const fnError = result.error;
       if (fnError) {
@@ -1611,7 +1715,14 @@
       if (!reply) throw new Error("empty-ai-reply");
       if (Number.isFinite(Number(data?.quota?.remaining))) aiQuotaRemaining = Math.max(0, Number(data.quota.remaining));
       const sources = Array.isArray(data?.sources) ? data.sources : [];
-      aiMessages = [...aiMessages, {role:"assistant", content:reply, sources, webSearchRequested:Boolean(data?.webSearchRequested)}];
+      if (Number.isFinite(Number(data?.searchQuota?.remaining))) aiSearchQuotaRemaining = Math.max(0, Number(data.searchQuota.remaining));
+      aiMessages = [...aiMessages, {
+        role:"assistant", content:reply, sources,
+        webSearchRequested:Boolean(data?.webSearchRequested),
+        webSearchEligible:Boolean(data?.webSearchEligible),
+        webSearchBlockedReason:String(data?.webSearchBlockedReason || ""),
+        followUps:aiFollowUpsFor(input)
+      }];
     } catch (e) {
       if (!aiError) {
         aiError = e?.message === "empty-ai-reply"
@@ -2414,7 +2525,9 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         return;
       }
       if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";render();return;}
+      if(action==="toggle-ai-web-search"){aiWebSearchEnabled=!aiWebSearchEnabled;localStorage.setItem(K.aiWebSearchEnabled,String(aiWebSearchEnabled));render();return;}
       if(action==="ai-prompt"){aiOpen=true;aiInput=el.dataset.prompt||"";render();setTimeout(()=>{const input=document.getElementById("ai-input");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},0);return;}
+      if(action==="ai-followup"){await sendAIMessage(el.dataset.prompt||"");return;}
       if(action==="send-ai"){await sendAIMessage();return;}
       if(action==="accept-cookies"){acceptedCookies=true;render();return;}
       if(action==="auth-mode"){authMode=el.dataset.mode;authMessage="";authResetMessage="";render();return;}
