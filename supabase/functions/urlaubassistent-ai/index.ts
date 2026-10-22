@@ -20,6 +20,17 @@ function cleanText(value: unknown, fallback = "") {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+function readDefaultNamedKey(envName: string) {
+  const raw = Deno.env.get(envName);
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.default === "string" ? parsed.default : "";
+  } catch {
+    return "";
+  }
+}
+
 function wantsWebSearch(input: string) {
   const q = String(input || "").toLowerCase();
   const asksForPersonalNumbers = /(meine?\s+(ausgaben|kosten|budgets?|rechnungen)|wie\s+viel\s+habe\s+ich\s+.*ausgegeben|wieviel\s+habe\s+ich\s+.*ausgegeben|bisherigen\s+urlaub|früheren\s+urlaub|letzten\s+urlaub\s+.*ausgegeben|ausgaben\s+vergleichen|budget\s+berechnen)/i.test(q);
@@ -98,7 +109,7 @@ Deno.serve(async (req: Request) => {
     const authorization = req.headers.get("Authorization") || "";
     const jwt = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const publicKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+    const publicKey = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || readDefaultNamedKey("SUPABASE_PUBLISHABLE_KEYS");
     if (!jwt || !supabaseUrl || !publicKey) {
       return json({ error: "Bitte melde dich erneut an, um die Reise-KI zu nutzen.", code: "AI_AUTH" }, 401);
     }
@@ -111,7 +122,7 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Bitte melde dich erneut an, um die Reise-KI zu nutzen.", code: "AI_AUTH" }, 401);
     }
 
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SECRET_KEY") || readDefaultNamedKey("SUPABASE_SECRET_KEYS");
     if (!serviceKey) {
       console.error("Supabase privileged key is missing; blocking AI request before provider call");
       return json({ error: "Der KI-Kostenschutz ist noch nicht vollständig eingerichtet.", code: "AI_LIMIT_UNAVAILABLE" }, 503);
