@@ -66,6 +66,58 @@ function normalizeSources(annotations: any[]) {
   return sources;
 }
 
+function sanitizeActionProposal(raw: unknown) {
+  const source = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const cleanString = (v: unknown, max = 120) => typeof v === "string" ? v.trim().slice(0, max) : "";
+  const cleanDate = (v: unknown) => {
+    const value = cleanString(v, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+  };
+  const cleanRows = (value: unknown, type: "expense" | "toll" | "text") => {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, 10).map((item: any) => {
+      if (!item || typeof item !== "object") return null;
+      if (type === "text") {
+        const text = cleanString(item.text, 160);
+        return text ? { text } : null;
+      }
+      const title = cleanString(item.title, 100);
+      const amount = Number(item.amount);
+      if (!title || !Number.isFinite(amount) || amount <= 0 || amount > 1000000) return null;
+      return {
+        title,
+        amount: Math.round(amount * 100) / 100,
+        category: cleanString(item.category, 48) || (type === "toll" ? "Parken" : "Sonstiges"),
+        date: cleanDate(item.date),
+        note: cleanString(item.note, 220),
+        personName: cleanString(item.personName, 80),
+      };
+    }).filter(Boolean);
+  };
+  const cleanIds = (value: unknown) => Array.isArray(value)
+    ? [...new Set(value.filter((v: unknown) => typeof v === "string" && v.length <= 80).map((v: string) => v.trim()).filter(Boolean))].slice(0, 20)
+    : [];
+  return {
+    expenses: cleanRows(source.expenses, "expense"),
+    tolls: cleanRows(source.tolls, "toll"),
+    packingItems: cleanRows(source.packingItems, "text"),
+    todos: cleanRows(source.todos, "text"),
+    completeTodoIds: cleanIds(source.completeTodoIds),
+    completePackingIds: cleanIds(source.completePackingIds),
+  };
+}
+
+function extractActionProposal(reply: string) {
+  const match = reply.match(/<APP_ACTIONS>([\s\S]*?)<\/APP_ACTIONS>/i);
+  if (!match) return { reply: reply.trim(), actions: null };
+  const visibleReply = reply.replace(match[0], "").trim();
+  try {
+    return { reply: visibleReply, actions: sanitizeActionProposal(JSON.parse(match[1])) };
+  } catch {
+    return { reply: visibleReply, actions: null };
+  }
+}
+
 function nextUtcMidnight() {
   const d = new Date();
   d.setUTCHours(24, 0, 0, 0);
@@ -157,7 +209,12 @@ Deno.serve(async (req: Request) => {
     }
 
     const latestQuestion = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
-    const webSearchEligible = wantsWebSearch(latestQuestion);
+    const rawReceiptImage = typeof body.receiptImageDataUrl === "string" ? body.receiptImageDataUrl : "";
+    const hasReceiptImage = Boolean(rawReceiptImage);
+    if (hasReceiptImage && (rawReceiptImage.length > 3000000 || !/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=\r\n]+$/.test(rawReceiptImage))) {
+      return json({ error: "Das Kassenbonbild ist zu groß oder hat ein nicht unterstütztes Format. Bitte fotografiere den Bon erneut.", code: "AI_RECEIPT_IMAGE_INVALID" }, 400);
+    }
+    const webSearchEligible = !hasReceiptImage && wantsWebSearch(latestQuestion);
     const webSearchEnabled = body.webSearchEnabled === true;
     let webSearchRequested = webSearchEnabled && webSearchEligible;
     let webSearchBlockedReason = webSearchEligible && !webSearchEnabled ? "OFF" : "";
@@ -192,6 +249,18 @@ Deno.serve(async (req: Request) => {
       ? `Für diese Frage ist eine Websuche verfügbar. Nutze sie genau einmal, bevor du antwortest, und verwende höchstens drei passende öffentliche Quellen. Suche nur nach allgemeinen, öffentlichen Reiseinformationen. Übermittle keine Namen, persönlichen Ausgaben, privaten Notizen oder andere persönliche App-Daten als Suchanfrage. Stütze aktuelle Aussagen auf die gefundenen Quellen. Wenn die Suche keine passenden Belege liefert, sage das offen und erfinde keine Quellen.`
       : `Für diese Frage ist keine Websuche freigegeben. Beantworte sie anhand der mitgelieferten App-Daten und deines Modellwissens; behaupte nicht, Websites live überprüft zu haben.`;
 
+    const actionInstruction = [
+      "Du kannst auf ausdrücklichen Wunsch des Nutzers Entwürfe für App-Aktionen vorbereiten. Führe selbst niemals Datenbankaktionen aus; die App zeigt den Entwurf und fragt vor dem Speichern nach einer Bestätigung.",
+      'Wenn eine Aktion gewünscht ist und die Angaben ausreichend sicher sind, hänge an die normale Antwort am Ende exakt einen Marker mit gültigem JSON an: <APP_ACTIONS>{"expenses":[],"tolls":[],"packingItems":[],"todos":[],"completeTodoIds":[],"completePackingIds":[]}</APP_ACTIONS>',
+      "Fülle nur tatsächlich gewünschte Änderungen aus; ungenutzte Listen bleiben leer. Den Marker niemals im sichtbaren Antworttext erwähnen.",
+      "Schema: expenses und tolls enthalten {title, amount, category, date, note, personName}; packingItems und todos enthalten {text}; completeTodoIds und completePackingIds enthalten nur IDs aus dem aktuellen Urlaubskontext.",
+      "Beträge müssen positiv und eindeutig sein. Wenn der Gesamtbetrag eines Kassenbons nicht klar erkennbar ist, erfinde nichts und frage nach; dann keine Ausgabe vorschlagen.",
+      "Bei einem Kassenbonfoto standardmäßig nur eine Ausgabe über den Gesamtbetrag anlegen, nicht jede Position einzeln. Titel z. B. Einkauf – Name des Geschäfts, Kategorie passend, Datum nur verwenden wenn lesbar, sonst heutiges Datum aus dem Kontext.",
+      "Bei mehreren genannten Ausgaben pro eindeutigem Betrag einen Eintrag anlegen. Lebensmittel/Essen als Ausgabe und Parken/Maut/Vignette als Gebühreneintrag. Keine Person zuordnen, wenn unklar, wer bezahlt hat.",
+      "Packlisten und To-dos nur nach eindeutiger Aufforderung ergänzen. Aufgaben nur dann als erledigt markieren, wenn der Nutzer dies eindeutig verlangt und die passende offene ID im Kontext existiert. IDs nur in den Marker-Listen verwenden. Niemals löschen.",
+      "Höchstens zehn neue Einträge pro Liste."
+    ].join("\n");
+
     const systemPrompt = `Du bist der KI-Assistent des Urlaubassistenten. Antworte freundlich, klar und auf Deutsch. Sei konkret und strukturiert, ohne unnötig lange Antworten zu schreiben.
 
 REISEPLANUNG UND REISEZIELE:
@@ -219,12 +288,29 @@ ALLGEMEINE REGELN:
 - Antworte übersichtlich: kurzer Einstieg, passende Überschriften und möglichst knappe Listen. Keine sichtbaren Markdown-Syntaxzeichen außer den Format-Markern, die automatisch gerendert werden.
 - Wenn eine Frage nicht reisebezogen ist, beantworte sie trotzdem kurz und hilfreich, soweit du kannst.
 
-Aktueller Reise- und Ausgabenkontext:
+Aktionsregeln für bestätigungspflichtige Entwürfe:\n${actionInstruction}\n\nAktueller Reise- und Ausgabenkontext:
 ${JSON.stringify(context, null, 2)}`;
 
+    const providerMessages: any[] = messages.map((message: any) => ({ role: message.role, content: message.content }));
+    if (hasReceiptImage) {
+      let targetIndex = -1;
+      for (let i = providerMessages.length - 1; i >= 0; i--) {
+        if (providerMessages[i].role === "user") { targetIndex = i; break; }
+      }
+      if (targetIndex >= 0) {
+        const previousText = String(providerMessages[targetIndex].content || "Bitte lies diesen Kassenbon aus und bereite einen Ausgabeentwurf vor.");
+        providerMessages[targetIndex] = {
+          role: "user",
+          content: [
+            { type: "text", text: previousText + "\nBitte lies den Kassenbon. Erfasse den Gesamtbetrag und das Geschäft; markiere unsichere Angaben ausdrücklich." },
+            { type: "image_url", image_url: { url: rawReceiptImage, detail: "high" } }
+          ]
+        };
+      }
+    }
     const requestBody: Record<string, unknown> = {
       model: "openrouter/free",
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
+      messages: [{ role: "system", content: systemPrompt }, ...providerMessages],
       max_tokens: 700,
       temperature: 0.45,
     };
@@ -270,9 +356,11 @@ ${JSON.stringify(context, null, 2)}`;
       return json({ error: "Die Reise-KI hat keine Antwort zurückgegeben.", code: "AI_EMPTY_REPLY" }, 502);
     }
 
+    const extracted = extractActionProposal(reply);
     const sources = normalizeSources(Array.isArray(assistantMessage.annotations) ? assistantMessage.annotations : []);
     return json({
-      reply,
+      reply: extracted.reply || reply,
+      actions: extracted.actions,
       sources,
       webSearchRequested,
       webSearchEligible,

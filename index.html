@@ -231,6 +231,12 @@
   let aiQuotaRemaining = null;
   let aiSearchQuotaRemaining = null;
   let aiWebSearchEnabled = localStorage.getItem(K.aiWebSearchEnabled) === "true";
+  let aiReceiptImageDataUrl = "";
+  let aiReceiptImageName = "";
+  let aiReceiptProcessing = false;
+  let aiSpeechRecognition = null;
+  let aiListening = false;
+  let aiActionsApplying = false;
   let aiThinkingTimer = null;
   let aiThinkingStatus = "Ich schaue mir deinen Urlaub an";
   let aiMessages = [
@@ -1365,8 +1371,8 @@
         },
         recentExpenses: trip.expenses.slice(-12).map(e => ({title:e.title, amount:e.amount, category:e.category, date:e.date, note:e.note || ""})),
         recentTolls: trip.tolls.slice(-8).map(e => ({title:e.title, amount:e.amount, date:e.date, note:e.note || ""})),
-        openTodos: trip.todos.filter(x=>!x.done).slice(0,20).map(x=>x.text),
-        openPacking: trip.packlist.filter(x=>!x.done).slice(0,20).map(x=>x.text),
+        openTodos: trip.todos.filter(x=>!x.done).slice(0,20).map((x,i)=>({id:"todo-"+(i+1),text:x.text})),
+        openPacking: trip.packlist.filter(x=>!x.done).slice(0,20).map((x,i)=>({id:"packing-"+(i+1),text:x.text})),
         customCategories: customExpenseCategories(trip)
       },
       availableTrips,
@@ -1565,7 +1571,7 @@
     const showFollowUpsIndex = aiMessages.length && aiMessages[aiMessages.length - 1].role === "assistant" ? aiMessages.length - 1 : -1;
     const bubbles = aiMessages.map((m, messageIndex) => m.role === "user"
       ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
-      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}${aiWebSearchNoticeHTML(m)}${messageIndex === showFollowUpsIndex ? aiFollowUpsHTML(m.followUps) : ""}</div></div>`
+      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}${aiWebSearchNoticeHTML(m)}${m.actions && !m.actionsApplied ? aiActionPreviewHTML(m.actions,messageIndex) : ""}${messageIndex === showFollowUpsIndex ? aiFollowUpsHTML(m.followUps) : ""}</div></div>`
     ).join("");
     return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
       <div class="pointer-events-auto absolute bottom-0 right-0 flex h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10 sm:bottom-24 sm:right-6 sm:h-[min(720px,82vh)] sm:rounded-[2rem]">
@@ -1598,6 +1604,7 @@
         </div>
 
         <div class="shrink-0 border-t border-slate-200 bg-white/92 p-3 backdrop-blur-xl sm:p-4">
+          ${aiInputToolsHTML()}
           <div class="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-inner focus-within:border-blue-200 focus-within:ring-4 focus-within:ring-blue-50">
             <textarea id="ai-input" rows="1" placeholder="Frag deinen Reise-Assistenten…" class="max-h-28 min-h-[44px] flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400">${esc(aiInput)}</textarea>
             <button type="button" data-action="send-ai" ${aiLoading?"disabled":""} class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">${icon("arrow-up","h-5 w-5")}</button>
@@ -1686,7 +1693,9 @@
     render();
     try {
       const context = aiContext();
+      const receiptImageForRequest = aiReceiptImageDataUrl;
       const payload = { messages: aiMessages.slice(-12), context, webSearchEnabled: aiWebSearchEnabled };
+      if (receiptImageForRequest) payload.receiptImageDataUrl = receiptImageForRequest;
       const result = await supabase.functions.invoke("urlaubassistent-ai", { body: payload });
       const fnError = result.error;
       if (fnError) {
@@ -1715,9 +1724,10 @@
       if (!reply) throw new Error("empty-ai-reply");
       if (Number.isFinite(Number(data?.quota?.remaining))) aiQuotaRemaining = Math.max(0, Number(data.quota.remaining));
       const sources = Array.isArray(data?.sources) ? data.sources : [];
+      const actions = normalizeAIActionProposal(data?.actions);
       if (Number.isFinite(Number(data?.searchQuota?.remaining))) aiSearchQuotaRemaining = Math.max(0, Number(data.searchQuota.remaining));
       aiMessages = [...aiMessages, {
-        role:"assistant", content:reply, sources,
+        role:"assistant", content:reply, sources, actions,
         webSearchRequested:Boolean(data?.webSearchRequested),
         webSearchEligible:Boolean(data?.webSearchEligible),
         webSearchBlockedReason:String(data?.webSearchBlockedReason || ""),
@@ -1732,9 +1742,140 @@
     } finally {
       stopAIThinking();
       aiLoading = false;
+      if (aiReceiptImageDataUrl) { aiReceiptImageDataUrl = ""; aiReceiptImageName = ""; }
       render();
       setTimeout(()=>{ const box=document.getElementById("ai-chat-messages"); if(box) box.scrollTop=box.scrollHeight; }, 0);
     }
+  }
+
+  function normalizeAIActionProposal(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const text = (v, max) => typeof v === "string" ? v.trim().slice(0, max || 160) : "";
+    const rows = (list, kind) => (Array.isArray(list) ? list : []).slice(0, 10).map(item => {
+      if (!item || typeof item !== "object") return null;
+      if (kind === "text") {
+        const value = text(item.text, 160);
+        return value ? {text:value} : null;
+      }
+      const title = text(item.title, 100);
+      const amount = Number(item.amount);
+      if (!title || !Number.isFinite(amount) || amount <= 0 || amount > 1000000) return null;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(String(item.date || "")) ? String(item.date) : iso();
+      return {title,amount:Math.round(amount*100)/100,category:text(item.category,48),date,note:text(item.note,220),personName:text(item.personName,80)};
+    }).filter(Boolean);
+    const ids = list => Array.isArray(list) ? [...new Set(list.filter(id=>typeof id==="string"&&id.length<=80).map(id=>id.trim()).filter(Boolean))].slice(0,20) : [];
+    const actions = {
+      expenses:rows(value.expenses,"expense"),
+      tolls:rows(value.tolls,"toll"),
+      packingItems:rows(value.packingItems,"text"),
+      todos:rows(value.todos,"text"),
+      completeTodoIds:ids(value.completeTodoIds),
+      completePackingIds:ids(value.completePackingIds)
+    };
+    return Object.values(actions).some(list=>list.length) ? actions : null;
+  }
+
+  function aiActionPreviewHTML(actions, messageIndex) {
+    const a=normalizeAIActionProposal(actions);
+    if(!a)return "";
+    const expenseTotal=a.expenses.reduce((sum,item)=>sum+item.amount,0);
+    const tollTotal=a.tolls.reduce((sum,item)=>sum+item.amount,0);
+    const count=a.expenses.length+a.tolls.length+a.packingItems.length+a.todos.length+a.completeTodoIds.length+a.completePackingIds.length;
+    const lines=[];
+    if(a.expenses.length)lines.push('<div class="flex items-start gap-2"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-700">'+icon("receipt-text","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="text-xs font-bold text-slate-800">'+a.expenses.length+' '+(a.expenses.length===1?"Ausgabe":"Ausgaben")+' · '+money(expenseTotal)+'</div><div class="mt-1 text-[11px] leading-4 text-slate-500">'+a.expenses.map(item=>esc(item.title)+" · "+money(item.amount)).join("<br>")+'</div></div></div>');
+    if(a.tolls.length)lines.push('<div class="flex items-start gap-2"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">'+icon("car-front","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="text-xs font-bold text-slate-800">'+a.tolls.length+' '+(a.tolls.length===1?"Gebühreneintrag":"Gebühreneinträge")+' · '+money(tollTotal)+'</div><div class="mt-1 text-[11px] leading-4 text-slate-500">'+a.tolls.map(item=>esc(item.title)+" · "+money(item.amount)).join("<br>")+'</div></div></div>');
+    if(a.packingItems.length)lines.push('<div class="flex items-start gap-2"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700">'+icon("luggage","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="text-xs font-bold text-slate-800">'+a.packingItems.length+' Packlistenpunkt(e)</div><div class="text-[11px] leading-4 text-slate-500">'+a.packingItems.map(item=>esc(item.text)).join(", ")+'</div></div></div>');
+    if(a.todos.length)lines.push('<div class="flex items-start gap-2"><span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">'+icon("list-checks","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="text-xs font-bold text-slate-800">'+a.todos.length+' To-do(s)</div><div class="text-[11px] leading-4 text-slate-500">'+a.todos.map(item=>esc(item.text)).join(", ")+'</div></div></div>');
+    if(a.completeTodoIds.length)lines.push('<div class="text-xs font-semibold text-slate-700">'+a.completeTodoIds.length+' To-do(s) als erledigt markieren</div>');
+    if(a.completePackingIds.length)lines.push('<div class="text-xs font-semibold text-slate-700">'+a.completePackingIds.length+' Packlistenpunkt(e) abhaken</div>');
+    const trip=activeTrip();
+    const blocked=!trip||trip.role==="viewer"||aiActionsApplying;
+    return '<div class="mt-3 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-white p-3"><div class="flex items-start gap-2"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">'+icon("clipboard-check","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="text-sm font-bold text-slate-900">Änderungen vorbereiten</div><div class="mt-0.5 text-[11px] leading-4 text-slate-500">'+count+' Änderung(en) für '+(trip?esc(trip.name):"deinen Urlaub")+' – noch nicht gespeichert</div></div></div><div class="mt-3 space-y-3">'+lines.join("")+'</div>' +
+      (!trip?'<div class="mt-3 text-xs text-rose-600">Wähle zuerst einen Urlaub aus.</div>':trip.role==="viewer"?'<div class="mt-3 text-xs text-rose-600">Du hast in diesem geteilten Urlaub nur Leserechte.</div>':"") +
+      '<div class="mt-4 grid grid-cols-2 gap-2"><button type="button" data-action="discard-ai-actions" data-message-index="'+messageIndex+'" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-600" '+(aiActionsApplying?"disabled":"")+'>'+icon("x","mr-1 inline-block h-3.5 w-3.5")+'Verwerfen</button><button type="button" data-action="approve-ai-actions" data-message-index="'+messageIndex+'" class="flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40" '+(blocked?"disabled":"")+'>'+icon("check","h-3.5 w-3.5")+'Bestätigen & speichern</button></div></div>';
+  }
+
+  function aiInputToolsHTML() {
+    let preview="";
+    if(aiReceiptImageDataUrl)preview='<div class="mb-2 flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-2"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700">'+icon("receipt-text","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="truncate text-xs font-semibold text-slate-800">'+esc(aiReceiptImageName||"Kassenbonfoto bereit")+'</div><div class="text-[10px] text-slate-500">Wird zur Analyse an den KI-Dienst übertragen</div></div><button type="button" data-action="remove-ai-receipt" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white" aria-label="Kassenbonfoto entfernen">'+icon("x","h-4 w-4")+'</button></div>';
+    const voiceClass=aiListening?"border-rose-200 bg-rose-50 text-rose-700":"border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700";
+    return preview+'<div class="mb-2 flex gap-2 overflow-x-auto pb-1"><button type="button" data-action="ai-start-voice" aria-label="Spracheingabe starten" class="flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold '+voiceClass+'">'+icon("mic","h-4 w-4")+(aiListening?"Höre zu…":"Sprechen")+'</button><button type="button" data-action="ai-receipt" '+(aiReceiptProcessing||aiLoading?"disabled":"")+' class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-40">'+icon("camera","h-4 w-4")+'Kassenbon</button><button type="button" data-action="ai-multiple-expenses" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("list-checks","h-4 w-4")+'Mehrere Ausgaben</button><button type="button" data-action="ai-trip-manage" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("calendar-check","h-4 w-4")+'Urlaub verwalten</button></div>' +
+    (aiListening?'<div class="mb-2 text-[10px] text-rose-600">Mikrofon aktiv – sprich jetzt.</div>':aiReceiptProcessing?'<div class="mb-2 text-[10px] text-blue-600">Kassenbonfoto wird vorbereitet…</div>':'')+
+    '<div class="mb-2 text-center text-[9px] leading-4 text-slate-400">Spracherkennung kann je nach Browser extern verarbeitet werden. Änderungen werden erst nach deiner Bestätigung gespeichert.</div><input id="ai-receipt-input" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Kassenbonfoto auswählen" />';
+  }
+
+  async function optimizeReceiptImage(file) {
+    if(!file||!String(file.type||"").startsWith("image/"))throw new Error("Bitte wähle ein Foto oder Bild des Kassenbons.");
+    if(file.size>15*1024*1024)throw new Error("Das Foto ist zu groß. Bitte wähle ein Bild unter 15 MB.");
+    const source=await new Promise((resolve,reject)=>{
+      const reader=new FileReader();reader.onerror=()=>reject(new Error("Das Kassenbonfoto konnte nicht gelesen werden."));
+      reader.onload=()=>resolve(String(reader.result||""));reader.readAsDataURL(file);
+    });
+    const image=await new Promise((resolve,reject)=>{
+      const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("Das Foto konnte nicht geöffnet werden."));img.src=source;
+    });
+    const scale=Math.min(1,1440/Math.max(image.width,image.height));
+    const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
+    const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Das Foto konnte nicht vorbereitet werden.");
+    ctx.fillStyle="#ffffff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0,canvas.width,canvas.height);
+    let optimized=canvas.toDataURL("image/jpeg",0.78);if(optimized.length>2800000)optimized=canvas.toDataURL("image/jpeg",0.58);
+    if(optimized.length>3000000)throw new Error("Das Bild ist noch zu groß. Bitte fotografiere den Bon erneut.");
+    return optimized;
+  }
+
+  function startAISpeechInput() {
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!Recognition){aiError="Dieser Browser unterstützt keine integrierte Spracherkennung. Nutze die Texteingabe oder die Kassenbon-Funktion.";render();return;}
+    if(aiListening){try{aiSpeechRecognition?.stop();}catch{}aiListening=false;render();return;}
+    try{
+      const recognition=new Recognition();recognition.lang="de-DE";recognition.continuous=false;recognition.interimResults=false;recognition.maxAlternatives=1;
+      recognition.onresult=event=>{
+        const transcript=String(event.results?.[0]?.[0]?.transcript||"").trim();aiListening=false;
+        if(transcript)aiInput=[aiInput,transcript].filter(Boolean).join(" ").trim();else aiError="Ich habe nichts verstanden. Versuche es bitte noch einmal.";
+        render();setTimeout(()=>{const input=document.getElementById("ai-input");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},0);
+      };
+      recognition.onerror=event=>{aiListening=false;aiError=event.error==="not-allowed"?"Bitte erlaube den Mikrofonzugriff in deinem Browser.":"Die Sprache konnte nicht erkannt werden. Du kannst es erneut versuchen oder tippen.";render();};
+      recognition.onend=()=>{if(aiListening){aiListening=false;render();}};
+      aiSpeechRecognition=recognition;aiListening=true;aiError="";render();recognition.start();
+    }catch{aiListening=false;aiError="Das Mikrofon konnte nicht gestartet werden. Prüfe die Browser-Berechtigung.";render();}
+  }
+
+  async function applyAIActions(messageIndex) {
+    if(aiActionsApplying)return;
+    const message=aiMessages[messageIndex];const actions=normalizeAIActionProposal(message?.actions);const trip=activeTrip();
+    if(!actions||!trip){aiError="Bitte wähle zuerst einen Urlaub aus.";render();return;}
+    if(!session?.user?.id){aiError="Bitte melde dich an, um Änderungen zu speichern.";render();return;}
+    if(trip.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
+    const openTodos=trip.todos.filter(item=>!item.done).slice(0,20);
+    const openPacking=trip.packlist.filter(item=>!item.done).slice(0,20);
+    const completeTodoIds=actions.completeTodoIds.map(key=>{const match=/^todo-(\d+)$/.exec(String(key));return match?openTodos[Number(match[1])-1]?.id:null;}).filter(Boolean);
+    const completePackingIds=actions.completePackingIds.map(key=>{const match=/^packing-(\d+)$/.exec(String(key));return match?openPacking[Number(match[1])-1]?.id:null;}).filter(Boolean);
+    const expenses=actions.expenses.map(item=>{
+      const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
+      return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Sonstiges")||"Sonstiges",person_id:person?.id||null,note:item.note||"",expense_date:item.date||iso()};
+    });
+    const tolls=actions.tolls.map(item=>{
+      const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
+      return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Parken")||"Parken",person_id:person?.id||null,note:item.note||"",toll_date:item.date||iso()};
+    });
+    const counts={expenses:0,tolls:0,packing:0,todos:0,doneTodos:0,donePacking:0};aiActionsApplying=true;aiError="";render();
+    try{
+      if(expenses.length){const {error:e}=await supabase.from("trip_expenses").insert(expenses);if(e)throw e;counts.expenses=expenses.length;message.actions.expenses=[];addActivity(trip.id,"hat "+expenses.length+" KI-Ausgabe(n) eingetragen","receipt-text");}
+      if(tolls.length){const {error:e}=await supabase.from("trip_tolls").insert(tolls);if(e)throw e;counts.tolls=tolls.length;message.actions.tolls=[];addActivity(trip.id,"hat "+tolls.length+" KI-Gebühreneintrag/-einträge eingetragen","car-front");}
+      if(actions.packingItems.length){const rows=actions.packingItems.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_pack_items").insert(rows);if(e)throw e;counts.packing=rows.length;message.actions.packingItems=[];addActivity(trip.id,"hat "+rows.length+" KI-Packlistenpunkt(e) hinzugefügt","luggage");}
+      if(actions.todos.length){const rows=actions.todos.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_todos").insert(rows);if(e)throw e;counts.todos=rows.length;message.actions.todos=[];addActivity(trip.id,"hat "+rows.length+" KI-To-do(s) hinzugefügt","list-checks");}
+      if(completeTodoIds.length){const {error:e}=await supabase.from("trip_todos").update({done:true}).in("id",completeTodoIds).eq("trip_id",trip.id);if(e)throw e;counts.doneTodos=completeTodoIds.length;message.actions.completeTodoIds=[];}
+      if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;message.actions.completePackingIds=[];}
+      message.actions=null;message.actionsApplied=true;await loadTrips();
+      const saved=[];if(counts.expenses)saved.push(counts.expenses+" "+(counts.expenses===1?"Ausgabe":"Ausgaben"));if(counts.tolls)saved.push(counts.tolls+" Gebühreneinträge");if(counts.packing)saved.push(counts.packing+" Packlistenpunkte");if(counts.todos)saved.push(counts.todos+" To-dos");if(counts.doneTodos)saved.push(counts.doneTodos+" To-dos abgehakt");if(counts.donePacking)saved.push(counts.donePacking+" Packlistenpunkte abgehakt");
+      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];render();
+    }catch(e){aiError="Nicht alle Änderungen konnten gespeichert werden. Bitte prüfe die Listen, bevor du es erneut versuchst. "+(e?.message||"");render();}
+    finally{aiActionsApplying=false;render();}
+  }
+
+  function discardAIActions(messageIndex) {
+    const message=aiMessages[messageIndex];if(!message?.actions)return;
+    message.actions=null;message.actionsDismissed=true;render();
   }
 
   function appHTML() {
@@ -2495,8 +2636,19 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       sendAIMessage();
     }
   });
-  root.addEventListener("change", (event) => {
+  root.addEventListener("change", async (event) => {
     readInputs();
+    if(event.target?.id === "ai-receipt-input"){
+      const file=event.target.files?.[0];
+      if(!file)return;
+      aiReceiptProcessing=true;aiError="";render();
+      try{
+        aiReceiptImageDataUrl=await optimizeReceiptImage(file);
+        aiReceiptImageName=file.name||"Kassenbonfoto";
+        aiInput="Bitte lies diesen Kassenbon aus und bereite eine Ausgabe über den Gesamtbetrag vor. Frage nach, wenn Geschäft, Betrag oder Datum nicht sicher erkennbar sind.";
+      }catch(e){aiReceiptImageDataUrl="";aiReceiptImageName="";aiError=e.message||"Das Kassenbonfoto konnte nicht vorbereitet werden.";}finally{aiReceiptProcessing=false;render();}
+      return;
+    }
     if(event.target?.id === "expense-category-search"){
       expenseCategorySearch = event.target.value;
       applyExpenseCategorySearch();
@@ -2526,6 +2678,13 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       }
       if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";render();return;}
       if(action==="toggle-ai-web-search"){aiWebSearchEnabled=!aiWebSearchEnabled;localStorage.setItem(K.aiWebSearchEnabled,String(aiWebSearchEnabled));render();return;}
+      if(action==="ai-start-voice"){startAISpeechInput();return;}
+      if(action==="ai-receipt"){if(activeTrip()?.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}document.getElementById("ai-receipt-input")?.click();return;}
+      if(action==="remove-ai-receipt"){aiReceiptImageDataUrl="";aiReceiptImageName="";render();return;}
+      if(action==="ai-multiple-expenses"){aiInput="Bitte trage diese mehreren Ausgaben einzeln ein: 35 € Lebensmittel, 12 € Parken und 8,50 € Eis. Passe die Beispiele an meine echten Ausgaben an, bevor ich sie sende.";aiError="";render();setTimeout(()=>{const input=document.getElementById("ai-input");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},0);return;}
+      if(action==="ai-trip-manage"){aiInput="Hilf mir, meinen aktuell geöffneten Urlaub zu verwalten. Prüfe offene To-dos und Packliste und hilf mir, die Änderungen vorzubereiten. Frage nach, wenn nicht klar ist, was geändert werden soll.";aiError="";render();setTimeout(()=>{const input=document.getElementById("ai-input");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},0);return;}
+      if(action==="approve-ai-actions"){await applyAIActions(Number(el.dataset.messageIndex));return;}
+      if(action==="discard-ai-actions"){discardAIActions(Number(el.dataset.messageIndex));return;}
       if(action==="ai-prompt"){aiOpen=true;aiInput=el.dataset.prompt||"";render();setTimeout(()=>{const input=document.getElementById("ai-input");if(input){input.focus();input.setSelectionRange(input.value.length,input.value.length);}},0);return;}
       if(action==="ai-followup"){await sendAIMessage(el.dataset.prompt||"");return;}
       if(action==="send-ai"){await sendAIMessage();return;}
@@ -2766,7 +2925,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=7").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=8").catch(() => {});
     }, { once: true });
   }
 
