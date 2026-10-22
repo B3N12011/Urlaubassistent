@@ -1409,14 +1409,6 @@
 
   function aiThinkingStepsFor(input) {
     const q = String(input || "").toLowerCase();
-    if (/(ausgab|kosten|budget|spar|teuer|geld|vergleich|bisherigen urlaub|früheren urlaub|ausgegeben)/.test(q)) {
-      return [
-        "Ich werte deine Urlaubsausgaben aus",
-        "Ich vergleiche deine bisherigen Reisen",
-        "Ich suche nach Sparmöglichkeiten",
-        "Ich fasse die wichtigsten Zahlen zusammen"
-      ];
-    }
     if (aiQuestionNeedsWebSearch(input)) {
       return [
         "Ich suche aktuelle Reiseinformationen",
@@ -1424,6 +1416,14 @@
         "Ich vergleiche die gefundenen Quellen",
         "Ich gleiche die Informationen mit deinem Budget ab",
         "Ich fasse die wichtigsten Punkte zusammen"
+      ];
+    }
+    if (/(ausgab|kosten|budget|spar|teuer|geld|vergleich|bisherigen urlaub|früheren urlaub|ausgegeben)/.test(q)) {
+      return [
+        "Ich werte deine Urlaubsausgaben aus",
+        "Ich vergleiche deine bisherigen Reisen",
+        "Ich suche nach Sparmöglichkeiten",
+        "Ich fasse die wichtigsten Zahlen zusammen"
       ];
     }
     return [
