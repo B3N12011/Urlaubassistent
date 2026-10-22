@@ -71,6 +71,60 @@
       backdrop-filter: blur(18px) saturate(135%);
       -webkit-backdrop-filter: blur(18px) saturate(135%);
     }
+
+    .ai-thinking-card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(96, 165, 250, 0.24);
+      background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(239,246,255,0.92), rgba(248,250,252,0.98));
+      box-shadow: 0 12px 32px rgba(37, 99, 235, 0.08), inset 0 1px 0 rgba(255,255,255,0.95);
+    }
+    .ai-thinking-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 -45%;
+      width: 42%;
+      background: linear-gradient(110deg, transparent, rgba(255,255,255,0.78), transparent);
+      transform: skewX(-18deg);
+      animation: ai-card-sheen 2.4s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .ai-thinking-text {
+      display: inline-block;
+      background: linear-gradient(100deg, #64748b 5%, #2563eb 34%, #7dd3fc 48%, #2563eb 62%, #64748b 95%);
+      background-size: 240% 100%;
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      -webkit-text-fill-color: transparent;
+      animation: ai-text-shimmer 2.1s linear infinite;
+    }
+    .ai-thinking-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 999px;
+      background: #60a5fa;
+      animation: ai-dot-pulse 1s ease-in-out infinite;
+    }
+    .ai-thinking-dot:nth-child(2) { animation-delay: .16s; }
+    .ai-thinking-dot:nth-child(3) { animation-delay: .32s; }
+    @keyframes ai-card-sheen {
+      0%, 12% { left: -45%; opacity: 0; }
+      28% { opacity: .8; }
+      66% { left: 115%; opacity: .45; }
+      100% { left: 115%; opacity: 0; }
+    }
+    @keyframes ai-text-shimmer {
+      from { background-position: 100% 0; }
+      to { background-position: -140% 0; }
+    }
+    @keyframes ai-dot-pulse {
+      0%, 80%, 100% { transform: translateY(0); opacity: .35; }
+      40% { transform: translateY(-3px); opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ai-thinking-card::before, .ai-thinking-text, .ai-thinking-dot { animation: none !important; }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900">
@@ -131,6 +185,8 @@
   let aiInput = "";
   let aiError = "";
   let aiQuotaRemaining = null;
+  let aiThinkingTimer = null;
+  let aiThinkingStatus = "Ich schaue mir deinen Urlaub an";
   let aiMessages = [
     {
       role: "assistant",
@@ -1166,8 +1222,56 @@
 
   function aiContext() {
     const trip = activeTrip();
-    if (!trip) return { currentTrip: null, account: { name: actorName() }, availableTrips: trips.map(t => ({name:t.name,destination:t.destination,startDate:t.startDate,endDate:t.endDate,budget:t.budget})) };
-    const total = totals();
+    const historicalTrips = trips
+      .filter(t => (!trip || t.id !== trip.id) && String(t.endDate || "") < iso())
+      .sort((a,b) => String(b.endDate || "").localeCompare(String(a.endDate || "")))
+      .slice(0, 12)
+      .map(t => {
+        const rows = [...(t.expenses || []), ...(t.tolls || [])];
+        const spent = rows.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+        const categoryTotals = {};
+        rows.forEach(e => {
+          const category = String(e.category || "Sonstiges");
+          categoryTotals[category] = (categoryTotals[category] || 0) + Number(e.amount || 0);
+        });
+        return {
+          name: t.name,
+          destination: t.destination,
+          startDate: t.startDate,
+          endDate: t.endDate,
+          budget: Number(t.budget || 0),
+          spent,
+          remaining: Number(t.budget || 0) - spent,
+          transactionCount: rows.length,
+          categoryTotals: Object.entries(categoryTotals)
+            .sort((a,b) => Number(b[1]) - Number(a[1]))
+            .slice(0, 6)
+            .map(([category, amount]) => ({ category, amount: Number(amount) }))
+        };
+      });
+
+    const availableTrips = trips
+      .filter(t => !trip || t.id !== trip.id)
+      .slice(0, 10)
+      .map(t => ({name:t.name,destination:t.destination,startDate:t.startDate,endDate:t.endDate,budget:t.budget}));
+
+    if (!trip) {
+      return {
+        currentTrip: null,
+        account: { name: actorName() },
+        availableTrips,
+        tripHistory: historicalTrips
+      };
+    }
+
+    const allCurrentSpending = [...trip.expenses, ...trip.tolls];
+    const total = allCurrentSpending.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const currentCategoryTotals = {};
+    allCurrentSpending.forEach(e => {
+      const category = String(e.category || "Sonstiges");
+      currentCategoryTotals[category] = (currentCategoryTotals[category] || 0) + Number(e.amount || 0);
+    });
+
     return {
       account: { name: actorName() },
       currentTrip: {
@@ -1179,10 +1283,14 @@
         role: trip.role,
         people: trip.people.map(p => p.name),
         spending: {
-          total: total.total,
-          remaining: total.remaining,
+          total,
+          remaining: Number(trip.budget || 0) - total,
           expenseCount: trip.expenses.length,
-          tollCount: trip.tolls.length
+          tollCount: trip.tolls.length,
+          categoryTotals: Object.entries(currentCategoryTotals)
+            .sort((a,b) => Number(b[1]) - Number(a[1]))
+            .slice(0, 8)
+            .map(([category, amount]) => ({ category, amount: Number(amount) }))
         },
         recentExpenses: trip.expenses.slice(-12).map(e => ({title:e.title, amount:e.amount, category:e.category, date:e.date, note:e.note || ""})),
         recentTolls: trip.tolls.slice(-8).map(e => ({title:e.title, amount:e.amount, date:e.date, note:e.note || ""})),
@@ -1190,19 +1298,20 @@
         openPacking: trip.packlist.filter(x=>!x.done).slice(0,20).map(x=>x.text),
         customCategories: customExpenseCategories(trip)
       },
-      availableTrips: trips.filter(t=>t.id!==trip.id).slice(0,10).map(t => ({name:t.name,destination:t.destination,startDate:t.startDate,endDate:t.endDate,budget:t.budget}))
+      availableTrips,
+      tripHistory: historicalTrips
     };
   }
 
   function aiQuickPromptsHTML() {
     const prompts = [
-      "Passt mein Budget zu diesem Urlaub?",
-      "Was muss ich vor der Reise noch erledigen?",
-      "Wofür geben wir am meisten Geld aus?",
-      "Hast du eine Idee für meinen nächsten Urlaub?"
+      "Finde 3 Reiseziele passend zu meinem Budget",
+      "Vergleiche meine bisherigen Urlaube",
+      "Wo können wir bei Ausgaben am meisten sparen?",
+      "Plane einen Urlaub für mein Budget"
     ];
     return `<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">${prompts.map((prompt,i)=>`
-      <button type="button" data-action="ai-prompt" data-prompt="${esc(prompt)}" class="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/80 hover:text-blue-800">${icon(["wallet-cards","check-circle-2","pie-chart","map"][i],"h-4 w-4 text-blue-700")}<span class="ml-2 align-middle">${esc(prompt)}</span></button>`).join("")}</div>`;
+      <button type="button" data-action="ai-prompt" data-prompt="${esc(prompt)}" class="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/80 hover:text-blue-800">${icon(["map-pinned","chart-no-axes-combined","piggy-bank","calendar-check"][i],"h-4 w-4 text-blue-700")}<span class="ml-2 align-middle">${esc(prompt)}</span></button>`).join("")}</div>`;
   }
 
   function aiChatHTML() {
@@ -1229,7 +1338,7 @@
         <div id="ai-chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
           ${aiMessages.length===1 ? `<div class="mb-3">${aiQuickPromptsHTML()}</div>` : ""}
           ${bubbles}
-          ${aiLoading ? `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200">Ich überlege…</div></div>` : ""}
+          ${aiLoading ? `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="ai-thinking-card flex min-w-0 flex-1 items-center gap-3 rounded-3xl rounded-bl-lg px-4 py-3"><div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600/8 text-blue-600">${icon("sparkles","h-5 w-5")}</div><div class="min-w-0 flex-1"><div id="ai-thinking-label" class="ai-thinking-text text-sm font-bold tracking-tight">${esc(aiThinkingStatus)}</div><div class="mt-1 text-[11px] leading-4 text-slate-500">Ich bereite deine Antwort vor</div><div class="mt-2 flex items-center gap-1.5"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div></div></div></div>` : ""}
           ${aiError ? `<div class="rounded-2xl bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-700 ring-1 ring-rose-100">${esc(aiError)}</div>` : ""}
         </div>
 
@@ -1244,6 +1353,57 @@
     </div>`;
   }
 
+  function aiThinkingStepsFor(input) {
+    const q = String(input || "").toLowerCase();
+    if (/(ausgab|kosten|budget|spar|teuer|geld|vergleich|bisherigen urlaub|früheren urlaub)/.test(q)) {
+      return [
+        "Ich analysiere deine Ausgaben",
+        "Ich vergleiche deine Urlaubsbudgets",
+        "Ich suche nach Sparmöglichkeiten",
+        "Ich fasse die wichtigsten Erkenntnisse zusammen"
+      ];
+    }
+    if (/(reiseziel|reiseziele|empfehl|wohin|plan.*urlaub|urlaub.*plan|nächsten urlaub|nächster urlaub|destination)/.test(q)) {
+      return [
+        "Ich ordne deine Reisewünsche",
+        "Ich vergleiche passende Reiseideen",
+        "Ich gleiche die Vorschläge mit deinem Budget ab",
+        "Ich plane die nächsten Schritte"
+      ];
+    }
+    return [
+      "Ich lese deine Frage",
+      "Ich prüfe die passenden Reisedaten",
+      "Ich sortiere die wichtigsten Informationen",
+      "Ich formuliere deine Antwort"
+    ];
+  }
+
+  function stopAIThinking() {
+    if (aiThinkingTimer !== null) {
+      clearInterval(aiThinkingTimer);
+      aiThinkingTimer = null;
+    }
+  }
+
+  function startAIThinking(input) {
+    stopAIThinking();
+    const steps = aiThinkingStepsFor(input);
+    let index = 0;
+    aiThinkingStatus = steps[0];
+    aiThinkingTimer = setInterval(() => {
+      index = (index + 1) % steps.length;
+      aiThinkingStatus = steps[index];
+      const label = document.getElementById("ai-thinking-label");
+      if (label) {
+        label.textContent = aiThinkingStatus;
+        label.classList.remove("ai-thinking-refresh");
+        void label.offsetWidth;
+        label.classList.add("ai-thinking-refresh");
+      }
+    }, 1750);
+  }
+
   async function sendAIMessage(textOverride = "") {
     const input = String(textOverride || aiInput || "").trim();
     if (!input || aiLoading) return;
@@ -1256,6 +1416,7 @@
     aiError = "";
     aiMessages = [...aiMessages, {role:"user", content:input}];
     aiLoading = true;
+    startAIThinking(input);
     render();
     try {
       const context = aiContext();
@@ -1293,6 +1454,7 @@
           : "Die Reise-KI ist gerade nicht erreichbar. Versuch es gleich noch einmal.";
       }
     } finally {
+      stopAIThinking();
       aiLoading = false;
       render();
       setTimeout(()=>{ const box=document.getElementById("ai-chat-messages"); if(box) box.scrollTop=box.scrollHeight; }, 0);
