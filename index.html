@@ -139,6 +139,22 @@
     .ai-source-domain { margin-top: 3px; font-size: 10px; font-weight: 600; color: #2563eb; }
     .ai-source-snippet { margin-top: 4px; font-size: 10px; line-height: 1.45; color: #64748b; }
     .ai-source-heading { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .ai-markdown { color: #334155; overflow-wrap: anywhere; line-height: 1.72; }
+    .ai-markdown p { margin: 0 0 .8rem; }
+    .ai-markdown p:last-child { margin-bottom: 0; }
+    .ai-markdown h3, .ai-markdown h4 { color: #0f172a; font-weight: 800; line-height: 1.35; letter-spacing: -.025em; margin: 1.1rem 0 .55rem; }
+    .ai-markdown h3 { font-size: 1.02rem; }
+    .ai-markdown h4 { font-size: .94rem; }
+    .ai-markdown ul, .ai-markdown ol { display: grid; gap: .55rem; margin: .65rem 0 1rem; padding: 0; list-style: none; }
+    .ai-markdown li { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: .42rem; align-items: start; }
+    .ai-markdown .ai-markdown-bullet { display: block; width: 7px; height: 7px; border-radius: 999px; background: #3b82f6; margin: .62em auto 0; box-shadow: 0 0 0 3px #dbeafe; }
+    .ai-markdown .ai-markdown-number { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 7px; background: #eff6ff; color: #1d4ed8; font-size: .68rem; font-weight: 800; margin-top: .1rem; }
+    .ai-markdown strong { color: #0f172a; font-weight: 800; }
+    .ai-markdown em { color: #475569; }
+    .ai-markdown a { color: #2563eb; font-weight: 650; text-decoration: underline; text-decoration-color: #bfdbfe; text-underline-offset: 3px; overflow-wrap: anywhere; }
+    .ai-markdown code { padding: .12rem .32rem; border-radius: .4rem; background: #f1f5f9; color: #0f172a; font-size: .88em; }
+    .ai-markdown blockquote { margin: .8rem 0; padding: .7rem .85rem; border-left: 3px solid #60a5fa; border-radius: 0 .8rem .8rem 0; background: #eff6ff; color: #334155; }
+    .ai-markdown hr { margin: 1rem 0; border: 0; border-top: 1px solid #e2e8f0; }
     .ai-chat-disclaimer { padding: 10px 8px 2px; color: #94a3b8; text-align: center; font-size: 10px; line-height: 1.55; }
   </style>
 </head>
@@ -1329,6 +1345,90 @@
       <button type="button" data-action="ai-prompt" data-prompt="${esc(prompt)}" class="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/80 hover:text-blue-800">${icon(["map-pinned","chart-no-axes-combined","piggy-bank","calendar-check"][i],"h-4 w-4 text-blue-700")}<span class="ml-2 align-middle">${esc(prompt)}</span></button>`).join("")}</div>`;
   }
 
+  function aiMarkdownInline(value) {
+    let html = esc(value);
+    html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+    html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (match, label, rawUrl) => {
+      try {
+        const safeUrl = new URL(rawUrl.replaceAll("&amp;", "&"));
+        if (safeUrl.protocol !== "https:" && safeUrl.protocol !== "http:") return label;
+        return '<a href="' + esc(safeUrl.href) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+      } catch { return label; }
+    });
+    html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/__(.+?)__/g, "<strong>$1</strong>");
+    html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+    return html;
+  }
+
+  function aiMarkdownHTML(value) {
+    const lines = String(value ?? "").replace(/\r\n?/g, "\n").split("\n");
+    const out = [];
+    let paragraph = [];
+    let list = null;
+    let quote = [];
+
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      out.push("<p>" + paragraph.map(aiMarkdownInline).join(" ") + "</p>");
+      paragraph = [];
+    };
+    const flushList = () => {
+      if (!list) return;
+      const items = list.items.map(item => list.type === "ol"
+        ? '<li><span class="ai-markdown-number">' + esc(item.number) + '</span><span>' + aiMarkdownInline(item.text) + '</span></li>'
+        : '<li><span class="ai-markdown-bullet" aria-hidden="true"></span><span>' + aiMarkdownInline(item.text) + '</span></li>').join("");
+      out.push("<" + list.type + ">" + items + "</" + list.type + ">");
+      list = null;
+    };
+    const flushQuote = () => {
+      if (!quote.length) return;
+      out.push("<blockquote>" + quote.map(aiMarkdownInline).join(" ") + "</blockquote>");
+      quote = [];
+    };
+    const flushBlocks = () => { flushParagraph(); flushList(); flushQuote(); };
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) { flushBlocks(); continue; }
+
+      const heading = line.match(/^(#{1,4})\s+(.+)$/);
+      if (heading) {
+        flushBlocks();
+        const level = heading[1].length <= 3 ? 3 : 4;
+        out.push("<h" + level + ">" + aiMarkdownInline(heading[2]) + "</h" + level + ">");
+        continue;
+      }
+      if (/^(---+|___+)\s*$/.test(line)) {
+        flushBlocks(); out.push("<hr>"); continue;
+      }
+
+      const quoteLine = line.match(/^>\s?(.*)$/);
+      if (quoteLine) {
+        flushParagraph(); flushList();
+        quote.push(quoteLine[1]);
+        continue;
+      }
+      flushQuote();
+
+      const unordered = line.match(/^[-*•]\s+(.+)$/);
+      const ordered = line.match(/^(\d+)[.)]\s+(.+)$/);
+      const match = unordered || ordered;
+      if (match) {
+        flushParagraph();
+        const type = unordered ? "ul" : "ol";
+        if (list && list.type !== type) flushList();
+        if (!list) list = {type, items:[]};
+        list.items.push(unordered ? {text:unordered[1]} : {number:ordered[1],text:ordered[2]});
+        continue;
+      }
+      flushList();
+      paragraph.push(line);
+    }
+    flushBlocks();
+    return out.join("");
+  }
+
   function aiSourcesHTML(sources, webSearchRequested = false) {
     const safeSources = (Array.isArray(sources) ? sources : []).slice(0, 3).map(source => {
       try {
@@ -1370,7 +1470,7 @@
     }
     const bubbles = aiMessages.map(m => m.role === "user"
       ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
-      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}${aiSourcesHTML(m.sources, m.webSearchRequested)}</div></div>`
+      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}</div></div>`
     ).join("");
     return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
       <div class="pointer-events-auto absolute bottom-0 right-0 flex h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10 sm:bottom-24 sm:right-6 sm:h-[min(720px,82vh)] sm:rounded-[2rem]">
