@@ -195,7 +195,8 @@
     checklistPrefix: "urlaubassistent-trip-check-",
     reminderSentPrefix: "urlaubassistent-reminder-sent-",
     customExpenseCategoriesPrefix: "urlaubassistent-custom-expense-categories-",
-    aiWebSearchEnabled: "urlaubassistent-ai-web-search-enabled"
+    aiWebSearchEnabled: "urlaubassistent-ai-web-search-enabled",
+    aiChatPrefix: "urlaubassistent-ai-chat-"
   };
 
   const LIST_LIMIT = 5;
@@ -230,7 +231,8 @@
   let aiError = "";
   let aiQuotaRemaining = null;
   let aiSearchQuotaRemaining = null;
-  let aiWebSearchEnabled = localStorage.getItem(K.aiWebSearchEnabled) === "true";
+  let aiWebSearchEnabled = false;
+  let aiChatLoadedStorageKey = "";
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
@@ -1523,8 +1525,8 @@
     if (reason === "COST_GUARD") {
       return '<div class="ai-web-search-note is-limited">Kostenbremse aktiv: Die Suchfreigabe konnte nicht sicher geprüft werden. Es wurde keine kostenpflichtige Websuche gestartet.</div>';
     }
-    if (reason === "OFF") {
-      return '<div class="ai-web-search-note">Sparmodus: Für diese Frage wurden keine Live-Webquellen verwendet. Du kannst die optionale Websuche oben einschalten.</div>';
+    if (reason === "OFF" || reason === "FEATURE_DISABLED") {
+      return '<div class="ai-web-search-note">Sparmodus: Die Live-Websuche ist vorerst komplett deaktiviert. Prüfe aktuelle Preise und Verfügbarkeiten bei Bedarf separat.</div>';
     }
     return "";
   }
@@ -1584,15 +1586,13 @@
             <button type="button" data-action="toggle-ai" aria-label="KI schließen" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-5 w-5")}</button>
           </div>
           <div class="mt-3 flex items-center gap-2 text-xs text-white/60"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${activeTrip()? `Aktiver Urlaub: ${esc(activeTrip().name)}` : "Noch kein Urlaub ausgewählt"}</div>
-          <div class="mt-3 flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-3">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 text-xs font-bold text-white/90">${icon("shield-check","h-4 w-4 text-emerald-300")} Websuche · optional</div>
-              <div class="mt-1 text-[11px] leading-4 text-white/60">${aiWebSearchEnabled ? "Aktiv · aktuell 0,005 US-$ je Suche" : "Sparmodus aktiv · keine Suchkosten"}</div>
-              <div class="mt-1 text-[10px] leading-4 text-white/45">${aiSearchQuotaRemaining === null ? "Maximal 3 Suchanfragen pro Nutzer und 10 insgesamt pro Tag – höchstens 0,05 US-$ am Tag insgesamt." : `Noch ${aiSearchQuotaRemaining} Websuchen für dich heute · serverseitiges Tageslimit`}</div>
+          <div class="mt-3 flex items-start gap-2 rounded-2xl border border-emerald-300/15 bg-white/[0.06] p-3">
+            ${icon("shield-check","mt-0.5 h-4 w-4 shrink-0 text-emerald-300")}
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-white/90">Sparmodus · Live-Websuche vorerst deaktiviert</div>
+              <div class="mt-1 text-[10px] leading-4 text-white/55">Die KI nutzt deine gespeicherten Urlaubsdaten. Aktuelle Preise, Öffnungszeiten und Verfügbarkeiten werden nicht live geprüft. Websuche schalten wir erst später bewusst frei.</div>
             </div>
-            <button type="button" data-action="toggle-ai-web-search" aria-pressed="${aiWebSearchEnabled ? "true" : "false"}" class="flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition ${aiWebSearchEnabled ? "bg-blue-500 text-white" : "bg-white/10 text-white/80 hover:bg-white/15"}"><span class="h-2 w-2 rounded-full ${aiWebSearchEnabled ? "bg-white" : "bg-slate-400"}"></span>${aiWebSearchEnabled ? "AN" : "AUS"}</button>
           </div>
-          <div class="mt-2 text-[10px] leading-4 text-white/45">Ohne Websuche nutzt die KI deine Urlaubsdaten und ihr Modellwissen. Aktuelle Preise und Verfügbarkeiten werden dann nicht live geprüft.</div>
         </div>
 
         <div id="ai-chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
@@ -1688,13 +1688,14 @@
     aiInput = "";
     aiError = "";
     aiMessages = [...aiMessages, {role:"user", content:input}];
+    saveAIChatHistory();
     aiLoading = true;
     startAIThinking(input);
     render();
     try {
       const context = aiContext();
       const receiptImageForRequest = aiReceiptImageDataUrl;
-      const payload = { messages: aiMessages.slice(-12), context, webSearchEnabled: aiWebSearchEnabled };
+      const payload = { messages: aiMessages.slice(-12), context, webSearchEnabled: false };
       if (receiptImageForRequest) payload.receiptImageDataUrl = receiptImageForRequest;
       const result = await supabase.functions.invoke("urlaubassistent-ai", { body: payload });
       const fnError = result.error;
@@ -1733,6 +1734,7 @@
         webSearchBlockedReason:String(data?.webSearchBlockedReason || ""),
         followUps:aiFollowUpsFor(input)
       }];
+      saveAIChatHistory();
     } catch (e) {
       if (!aiError) {
         aiError = e?.message === "empty-ai-reply"
@@ -1743,6 +1745,7 @@
       stopAIThinking();
       aiLoading = false;
       if (aiReceiptImageDataUrl) { aiReceiptImageDataUrl = ""; aiReceiptImageName = ""; }
+      saveAIChatHistory();
       render();
       setTimeout(()=>{ const box=document.getElementById("ai-chat-messages"); if(box) box.scrollTop=box.scrollHeight; }, 0);
     }
@@ -1868,14 +1871,14 @@
       if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;message.actions.completePackingIds=[];}
       message.actions=null;message.actionsApplied=true;await loadTrips();
       const saved=[];if(counts.expenses)saved.push(counts.expenses+" "+(counts.expenses===1?"Ausgabe":"Ausgaben"));if(counts.tolls)saved.push(counts.tolls+" Gebühreneinträge");if(counts.packing)saved.push(counts.packing+" Packlistenpunkte");if(counts.todos)saved.push(counts.todos+" To-dos");if(counts.doneTodos)saved.push(counts.doneTodos+" To-dos abgehakt");if(counts.donePacking)saved.push(counts.donePacking+" Packlistenpunkte abgehakt");
-      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];render();
+      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];saveAIChatHistory();render();
     }catch(e){aiError="Nicht alle Änderungen konnten gespeichert werden. Bitte prüfe die Listen, bevor du es erneut versuchst. "+(e?.message||"");render();}
     finally{aiActionsApplying=false;render();}
   }
 
   function discardAIActions(messageIndex) {
     const message=aiMessages[messageIndex];if(!message?.actions)return;
-    message.actions=null;message.actionsDismissed=true;render();
+    message.actions=null;message.actionsDismissed=true;saveAIChatHistory();render();
   }
 
   function appHTML() {
@@ -2070,6 +2073,82 @@
     return trips.find(t=>t.id===selectedTripId) || trips[0] || null;
   }
 
+  function aiChatStorageKey() {
+    if (!session?.user?.id) return "";
+    const trip = activeTrip();
+    return K.aiChatPrefix + session.user.id + "-" + (trip?.id || "general");
+  }
+
+  function defaultAIChatMessage() {
+    return {
+      role:"assistant",
+      content:"Hi! Ich bin dein Reise-KI-Assistent. Ich helfe dir bei Urlaub, Budget und Packliste. Du kannst mir Fragen stellen, per Mikrofon Ausgaben diktieren oder einen Kassenbon fotografieren. Änderungen speichere ich erst nach deiner Bestätigung."
+    };
+  }
+
+  function saveAIChatHistory() {
+    const key = aiChatStorageKey();
+    if (!key) return;
+    try {
+      const messages = aiMessages.slice(-60).map(message => {
+        const stored = { role:message.role === "user" ? "user" : "assistant", content:String(message.content || "").slice(0,7000) };
+        if (Array.isArray(message.sources)) {
+          stored.sources = message.sources.slice(0,3).map(source => {
+            try {
+              const url = new URL(String(source.url || ""));
+              if (url.protocol !== "https:") return null;
+              return {url:url.href,title:String(source.title || url.hostname).slice(0,150),snippet:String(source.snippet || "").slice(0,220)};
+            } catch { return null; }
+          }).filter(Boolean);
+        }
+        if (message.webSearchRequested) stored.webSearchRequested = true;
+        if (message.webSearchEligible) stored.webSearchEligible = true;
+        if (message.webSearchBlockedReason) stored.webSearchBlockedReason = String(message.webSearchBlockedReason).slice(0,32);
+        if (Array.isArray(message.followUps)) stored.followUps = message.followUps.slice(0,3).map(v=>String(v).slice(0,120));
+        if (message.actions && !message.actionsApplied && !message.actionsDismissed) stored.pendingActionDiscarded = true;
+        if (message.actionsApplied) stored.actionsApplied = true;
+        if (message.actionsDismissed) stored.actionsDismissed = true;
+        return stored;
+      });
+      localStorage.setItem(key,JSON.stringify({version:1,savedAt:new Date().toISOString(),messages}));
+      aiChatLoadedStorageKey = key;
+    } catch(e) {
+      console.warn("AI chat history could not be stored locally",e?.message || "");
+    }
+  }
+
+  function loadAIChatHistory(force = false) {
+    const key = aiChatStorageKey();
+    if (!key) return;
+    if (!force && key === aiChatLoadedStorageKey) return;
+    aiChatLoadedStorageKey = key;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || "null");
+      const storedMessages = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.messages) ? parsed.messages : []);
+      const restored = storedMessages.slice(-60).map(message => {
+        if (!message || !["user","assistant"].includes(message.role) || typeof message.content !== "string") return null;
+        const item = {role:message.role,content:message.content.slice(0,7000)};
+        if (Array.isArray(message.sources)) item.sources = message.sources.slice(0,3);
+        if (message.webSearchRequested) item.webSearchRequested = true;
+        if (message.webSearchEligible) item.webSearchEligible = true;
+        if (message.webSearchBlockedReason) item.webSearchBlockedReason = String(message.webSearchBlockedReason).slice(0,32);
+        if (Array.isArray(message.followUps)) item.followUps = message.followUps.slice(0,3);
+        if (message.pendingActionDiscarded) {
+          item.content += "\n\n*Ein offener Änderungsentwurf wurde beim Neuladen aus Sicherheitsgründen verworfen. Bitte fordere ihn erneut an; gespeichert wurde noch nichts.*";
+          item.actionsDismissed = true;
+        }
+        if (message.actionsApplied) item.actionsApplied = true;
+        if (message.actionsDismissed) item.actionsDismissed = true;
+        return item;
+      }).filter(Boolean);
+      aiMessages = restored.length ? restored : [defaultAIChatMessage()];
+      if (!storedMessages.length) saveAIChatHistory();
+    } catch {
+      aiMessages = [defaultAIChatMessage()];
+      saveAIChatHistory();
+    }
+  }
+
   function totals() {
     const trip = activeTrip();
     if (!trip) return { total:0, remaining:0 };
@@ -2134,6 +2213,7 @@
       if (!selectedTripId && trips[0]) selectedTripId = trips[0].id;
       if (selectedTripId && !trips.some(t=>t.id===selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
+      loadAIChatHistory();
     } catch (e) {
       error = "Daten konnten nicht geladen werden. Überprüfe ggf. deine Internetverbindung.";
     } finally {
