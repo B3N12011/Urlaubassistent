@@ -1848,8 +1848,8 @@
     if(trip.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     const openTodos=trip.todos.filter(item=>!item.done).slice(0,20);
     const openPacking=trip.packlist.filter(item=>!item.done).slice(0,20);
-    const completeTodoIds=actions.completeTodoIds.map(key=>{const match=/^todo-(\\d+)$/.exec(String(key));return match?openTodos[Number(match[1])-1]?.id:null;}).filter(Boolean);
-    const completePackingIds=actions.completePackingIds.map(key=>{const match=/^packing-(\\d+)$/.exec(String(key));return match?openPacking[Number(match[1])-1]?.id:null;}).filter(Boolean);
+    const completeTodoIds=actions.completeTodoIds.map(key=>{const match=/^todo-(\d+)$/.exec(String(key));return match?openTodos[Number(match[1])-1]?.id:null;}).filter(Boolean);
+    const completePackingIds=actions.completePackingIds.map(key=>{const match=/^packing-(\d+)$/.exec(String(key));return match?openPacking[Number(match[1])-1]?.id:null;}).filter(Boolean);
     const expenses=actions.expenses.map(item=>{
       const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
       return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Sonstiges")||"Sonstiges",person_id:person?.id||null,note:item.note||"",expense_date:item.date||iso()};
