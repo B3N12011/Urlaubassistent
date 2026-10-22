@@ -1604,16 +1604,16 @@
         </div>
 
         <div class="shrink-0 border-t border-slate-200 bg-white/92 p-3 backdrop-blur-xl sm:p-4">
-          \${aiInputToolsHTML()}
+          ${aiInputToolsHTML()}
           <div class="flex items-end gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-inner focus-within:border-blue-200 focus-within:ring-4 focus-within:ring-blue-50">
             <div class="min-w-0 flex-1">
               <div class="px-2 pb-1 text-[10px] font-bold text-slate-500">Frage stellen oder Ausgabe eintragen</div>
-              <textarea id="ai-input" rows="1" placeholder="Z. B. „Trag 34,70 € bei Aldi für Essen ein“… " class="max-h-28 min-h-[44px] w-full resize-none border-0 bg-transparent px-2 py-1 text-sm text-slate-900 outline-none placeholder:text-slate-400">\${esc(aiInput)}</textarea>
+              <textarea id="ai-input" rows="1" placeholder="Z. B. „Trag 34,70 € bei Aldi für Essen ein“… " class="max-h-28 min-h-[44px] w-full resize-none border-0 bg-transparent px-2 py-1 text-sm text-slate-900 outline-none placeholder:text-slate-400">${esc(aiInput)}</textarea>
             </div>
-            <button type="button" data-action="ai-start-voice" aria-label="\${aiListening?"Spracheingabe beenden":"Per Sprache sprechen"}" title="\${aiListening?"Spracheingabe beenden":"Per Sprache sprechen"}" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition \${aiListening?"border-rose-200 bg-rose-50 text-rose-700":"border-blue-100 bg-white text-blue-700 hover:bg-blue-50"}">\${icon("mic","h-5 w-5")}</button>
-            <button type="button" data-action="send-ai" \${aiLoading||aiReceiptProcessing?"disabled":""} aria-label="Nachricht senden" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">\${icon("arrow-up","h-5 w-5")}</button>
+            <button type="button" data-action="ai-start-voice" aria-label="${aiListening?"Spracheingabe beenden":"Per Sprache sprechen"}" title="${aiListening?"Spracheingabe beenden":"Per Sprache sprechen"}" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition ${aiListening?"border-rose-200 bg-rose-50 text-rose-700":"border-blue-100 bg-white text-blue-700 hover:bg-blue-50"}">${icon("mic","h-5 w-5")}</button>
+            <button type="button" data-action="send-ai" ${aiLoading||aiReceiptProcessing?"disabled":""} aria-label="Nachricht senden" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">${icon("arrow-up","h-5 w-5")}</button>
           </div>
-          <div class="mt-2 text-center text-[10px] leading-4 text-slate-400">\${aiListening?"Mikrofon aktiv – sprich jetzt.":aiQuotaRemaining === null ? "10 KI-Fragen pro Tag · " : \`\${aiQuotaRemaining} KI-Fragen heute noch · \`}Zum Eintragen per Sprache auf das Mikrofon tippen. Gespeichert wird erst nach deiner Bestätigung.</div>
+          <div class="mt-2 text-center text-[10px] leading-4 text-slate-400">${aiListening?"Mikrofon aktiv – sprich jetzt.":aiQuotaRemaining === null ? "10 KI-Fragen pro Tag · " : \`${aiQuotaRemaining} KI-Fragen heute noch · \`}Zum Eintragen per Sprache auf das Mikrofon tippen. Gespeichert wird erst nach deiner Bestätigung.</div>
           <div class="mt-1 text-center text-[9px] leading-4 text-slate-400">Spracheingabe hängt vom Browser und der Mikrofonfreigabe ab; die Spracherkennung kann extern verarbeitet werden.</div>
         </div>
       </div>
