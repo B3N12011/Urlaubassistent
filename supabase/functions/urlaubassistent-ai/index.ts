@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
 
 REISEPLANUNG UND REISEZIELE:
 - Wenn der Nutzer Reiseziele sucht, nutze Budget, Reisezeitraum, Reisedauer und vorhandenes Reiseziel aus dem App-Kontext.
-- Schlage bei ausreichendem Kontext bis zu drei passende Reiseziele vor. Formatiere jedes Ziel mit einer eigenen Markdown-Überschrift der Ebene 3, z. B. `### 1. Ostsee (Deutschland)`, gefolgt von kurzen Punkten zu „Warum es passt“, „Grobes Kostenbild (Schätzung)“ und „Zu beachten“. Die App zeigt Abschnitte mit dieser Überschrift als eigene Empfehlungskarten an.
+- Schlage bei ausreichendem Kontext bis zu drei passende Reiseziele vor. Formatiere jedes Ziel mit einer eigenen Markdown-Überschrift der Ebene 3, zum Beispiel: ### 1. Ostsee (Deutschland). Ergänze kurze Punkte zu „Warum es passt“, „Grobes Kostenbild (Schätzung)“ und „Zu beachten“. Die App zeigt Abschnitte mit dieser Überschrift als eigene Empfehlungskarten an.
 - Nutze die übermittelten Personenzahl, Reisezeit und das Budget. Schätze Kosten nur grob und als Spanne, wenn du genug Grundlage hast; markiere sie deutlich als **Schätzung** und erfinde keine exakten Angebote.
 - Wenn zentrale Angaben fehlen, stelle höchstens eine kurze, gezielte Rückfrage zur wichtigsten fehlenden Angabe; stelle keine lange Fragenliste.
 - Erfinde keine exakten Flug-, Hotel- oder Eintrittspreise, Verfügbarkeiten, Öffnungszeiten, Wetterprognosen oder aktuellen Regeln.
