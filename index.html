@@ -125,6 +125,21 @@
     @media (prefers-reduced-motion: reduce) {
       .ai-thinking-card::before, .ai-thinking-text, .ai-thinking-dot { animation: none !important; }
     }
+
+    .ai-source-list { display: grid; gap: 8px; margin-top: 12px; }
+    .ai-source-card {
+      display: flex; gap: 10px; align-items: flex-start; padding: 10px 11px;
+      border: 1px solid rgba(148,163,184,.20); border-radius: 15px;
+      background: rgba(248,250,252,.92); text-decoration: none;
+      transition: border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+    .ai-source-card:hover { border-color: rgba(96,165,250,.55); background: #eff6ff; transform: translateY(-1px); }
+    .ai-source-favicon { width: 28px; height: 28px; border-radius: 9px; background: white; padding: 4px; object-fit: contain; flex: 0 0 auto; border: 1px solid #e2e8f0; }
+    .ai-source-title { font-size: 11px; line-height: 1.35; font-weight: 700; color: #0f172a; }
+    .ai-source-domain { margin-top: 3px; font-size: 10px; font-weight: 600; color: #2563eb; }
+    .ai-source-snippet { margin-top: 4px; font-size: 10px; line-height: 1.45; color: #64748b; }
+    .ai-source-heading { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .ai-chat-disclaimer { padding: 10px 8px 2px; color: #94a3b8; text-align: center; font-size: 10px; line-height: 1.55; }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900">
@@ -1314,13 +1329,44 @@
       <button type="button" data-action="ai-prompt" data-prompt="${esc(prompt)}" class="rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 text-left text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/80 hover:text-blue-800">${icon(["map-pinned","chart-no-axes-combined","piggy-bank","calendar-check"][i],"h-4 w-4 text-blue-700")}<span class="ml-2 align-middle">${esc(prompt)}</span></button>`).join("")}</div>`;
   }
 
+  function aiSourcesHTML(sources) {
+    const safeSources = (Array.isArray(sources) ? sources : []).slice(0, 3).map(source => {
+      try {
+        const parsed = new URL(String(source.url || ""));
+        if (parsed.protocol !== "https:") return null;
+        const host = parsed.hostname.replace(/^www\./i, "");
+        const title = String(source.title || host).trim().slice(0, 150);
+        const snippet = String(source.snippet || "").trim().slice(0, 220);
+        return { url: parsed.href, host, title, snippet };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+    if (!safeSources.length) return "";
+    return `<div class="mt-3 border-t border-slate-100 pt-3">
+      <div class="ai-source-heading">${icon("globe-2","h-3.5 w-3.5")} Quellen aus dem Web</div>
+      <div class="ai-source-list">${safeSources.map(source => {
+        const favicon = "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(source.host) + "&sz=64";
+        return `<a class="ai-source-card" href="${esc(source.url)}" target="_blank" rel="noopener noreferrer">
+          <img class="ai-source-favicon" src="${esc(favicon)}" alt="" loading="lazy" referrerpolicy="no-referrer" />
+          <div class="min-w-0 flex-1">
+            <div class="ai-source-title">${esc(source.title)}</div>
+            <div class="ai-source-domain">${esc(source.host)} · Website öffnen</div>
+            ${source.snippet ? `<div class="ai-source-snippet">${esc(source.snippet)}</div>` : ""}
+          </div>
+          ${icon("arrow-up-right","mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400")}
+        </a>`;
+      }).join("")}</div>
+    </div>`;
+  }
+
   function aiChatHTML() {
     if (!aiOpen) {
       return `<button type="button" data-action="toggle-ai" aria-label="Urlaubassistent KI öffnen" class="fixed bottom-[5.75rem] right-4 z-[90] flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-white/70 bg-white/78 text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.92)_inset] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/90 active:scale-95 sm:bottom-24 sm:right-6">${icon("sparkles","h-6 w-6")}</button>`;
     }
     const bubbles = aiMessages.map(m => m.role === "user"
       ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
-      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
+      : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}${aiSourcesHTML(m.sources)}</div></div>`
     ).join("");
     return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
       <div class="pointer-events-auto absolute bottom-0 right-0 flex h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10 sm:bottom-24 sm:right-6 sm:h-[min(720px,82vh)] sm:rounded-[2rem]">
@@ -1340,6 +1386,7 @@
           ${bubbles}
           ${aiLoading ? `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="ai-thinking-card flex min-w-0 flex-1 items-center gap-3 rounded-3xl rounded-bl-lg px-4 py-3"><div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600/8 text-blue-600">${icon("sparkles","h-5 w-5")}</div><div class="min-w-0 flex-1"><div id="ai-thinking-label" class="ai-thinking-text text-sm font-bold tracking-tight">${esc(aiThinkingStatus)}</div><div class="mt-1 text-[11px] leading-4 text-slate-500">Ich bereite deine Antwort vor</div><div class="mt-2 flex items-center gap-1.5"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div></div></div></div>` : ""}
           ${aiError ? `<div class="rounded-2xl bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-700 ring-1 ring-rose-100">${esc(aiError)}</div>` : ""}
+          <div class="ai-chat-disclaimer">Urlaubassistent KI kann Fehler machen. Überprüfe wichtige Informationen vor Buchungen und Entscheidungen.</div>
         </div>
 
         <div class="shrink-0 border-t border-slate-200 bg-white/92 p-3 backdrop-blur-xl sm:p-4">
@@ -1353,22 +1400,30 @@
     </div>`;
   }
 
+  function aiQuestionNeedsWebSearch(input) {
+    const q = String(input || "").toLowerCase();
+    const asksForCurrentInfo = /(aktuell|aktuelle|aktuellen|heute|jetzt|dieses jahr|dieses wochenende|wetter|öffnungszeit|öffnung|veranstaltung|event|eintrittspreis|hotelpreis|flugpreis|flugverbindung|verfügbarkeit|reisehinweis|einreisebestimmung|quelle|quellen|recherch|online suchen)/i.test(q);
+    const asksForRecommendations = /(reiseziel|reiseziele|wohin|urlaubsidee|urlaubsideen|reiseidee|reiseideen|reisevorschlag|reisevorschläge|empfehl.*(reise|urlaub|ziel)|plan.*urlaub|urlaub.*plan|nächsten urlaub|nächster urlaub|ausflug|sehenswürdigkeit|attraktion)/i.test(q);
+    return asksForCurrentInfo || asksForRecommendations;
+  }
+
   function aiThinkingStepsFor(input) {
     const q = String(input || "").toLowerCase();
-    if (/(ausgab|kosten|budget|spar|teuer|geld|vergleich|bisherigen urlaub|früheren urlaub)/.test(q)) {
+    if (/(ausgab|kosten|budget|spar|teuer|geld|vergleich|bisherigen urlaub|früheren urlaub|ausgegeben)/.test(q)) {
       return [
-        "Ich analysiere deine Ausgaben",
-        "Ich vergleiche deine Urlaubsbudgets",
+        "Ich werte deine Urlaubsausgaben aus",
+        "Ich vergleiche deine bisherigen Reisen",
         "Ich suche nach Sparmöglichkeiten",
-        "Ich fasse die wichtigsten Erkenntnisse zusammen"
+        "Ich fasse die wichtigsten Zahlen zusammen"
       ];
     }
-    if (/(reiseziel|reiseziele|empfehl|wohin|plan.*urlaub|urlaub.*plan|nächsten urlaub|nächster urlaub|destination)/.test(q)) {
+    if (aiQuestionNeedsWebSearch(input)) {
       return [
-        "Ich ordne deine Reisewünsche",
-        "Ich vergleiche passende Reiseideen",
-        "Ich gleiche die Vorschläge mit deinem Budget ab",
-        "Ich plane die nächsten Schritte"
+        "Ich suche aktuelle Reiseinformationen",
+        "Ich prüfe passende Websites",
+        "Ich vergleiche die gefundenen Quellen",
+        "Ich gleiche die Informationen mit deinem Budget ab",
+        "Ich fasse die wichtigsten Punkte zusammen"
       ];
     }
     return [
@@ -1446,7 +1501,8 @@
       const reply = String(data?.reply || "").trim();
       if (!reply) throw new Error("empty-ai-reply");
       if (Number.isFinite(Number(data?.quota?.remaining))) aiQuotaRemaining = Math.max(0, Number(data.quota.remaining));
-      aiMessages = [...aiMessages, {role:"assistant", content:reply}];
+      const sources = Array.isArray(data?.sources) ? data.sources : [];
+      aiMessages = [...aiMessages, {role:"assistant", content:reply, sources}];
     } catch (e) {
       if (!aiError) {
         aiError = e?.message === "empty-ai-reply"
