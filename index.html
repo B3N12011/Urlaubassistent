@@ -1402,9 +1402,12 @@
 
   function aiQuestionNeedsWebSearch(input) {
     const q = String(input || "").toLowerCase();
-    const asksForCurrentInfo = /(aktuell|aktuelle|aktuellen|heute|jetzt|dieses jahr|dieses wochenende|wetter|öffnungszeit|öffnung|veranstaltung|event|eintrittspreis|hotelpreis|flugpreis|flugverbindung|verfügbarkeit|reisehinweis|einreisebestimmung|quelle|quellen|recherch|online suchen)/i.test(q);
-    const asksForRecommendations = /(reiseziel|reiseziele|wohin|urlaubsidee|urlaubsideen|reiseidee|reiseideen|reisevorschlag|reisevorschläge|empfehl.*(reise|urlaub|ziel)|plan.*urlaub|urlaub.*plan|nächsten urlaub|nächster urlaub|ausflug|sehenswürdigkeit|attraktion)/i.test(q);
-    return asksForCurrentInfo || asksForRecommendations;
+    const asksForPersonalNumbers = /(meine?\s+(ausgaben|kosten|budgets?|rechnungen)|wie\s+viel\s+habe\s+ich\s+.*ausgegeben|wieviel\s+habe\s+ich\s+.*ausgegeben|bisherigen\s+urlaub|früheren\s+urlaub|letzten\s+urlaub\s+.*ausgegeben|ausgaben\s+vergleichen|budget\s+berechnen)/i.test(q);
+    const asksForRecommendations = /(reiseziele?|wohin|urlaubsideen?|reiseideen?|reisevorschl[aä]ge?|empfehl.*(reise|urlaub|ziel)|plan.*(urlaub|reise)|urlaub.*(plan|ideen)|nächsten\s+urlaub|nächster\s+urlaub|ausflüge?|sehenswürdigkeiten?|attraktionen?|was\s+kann\s+man\s+in|beste\s+reisezeit|wann\s+.*reisen)/i.test(q);
+    const asksForTravelResearch = /(wetter|öffnungszeit|einreisebestimmung|reisehinweis|hotelpreis|flugpreis|flugverbindung|eintrittspreis|wechselkurs|umrechnungskurs|veranstaltung|geöffnet|live-preis|aktuelle\s+preise|quellen\s+für|online\s+recherch)/i.test(q);
+    const asksForCurrentInfo = /(aktuell|aktuelle|aktuellen|heute|jetzt|dieses\s+jahr|diesen\s+sommer|dieses\s+wochenende|preis|preise|verfügbarkeit|geöffnet)/i.test(q);
+    if (asksForPersonalNumbers && !asksForRecommendations) return false;
+    return asksForRecommendations || (asksForTravelResearch && asksForCurrentInfo);
   }
 
   function aiThinkingStepsFor(input) {
