@@ -3083,7 +3083,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
-      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();return;}
+      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";aiHistoryOpen=false;aiSavedChats=[];aiSavedChatsError="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;aiChatLoadedStorageKey="";await loadAIChatHistory(true);render();setupRealtime();return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
       if(action==="close-share"){shareDialogOpen=false;shareTripId=null;shareCode="";render();return;}
