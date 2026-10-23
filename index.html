@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
-  <link rel="icon" type="image/png" href="icon-192.png?v=3" />
+  <link rel="icon" type="image/png" href="icon-192.png?v=13" />
   <link rel="apple-touch-icon" href="icon-192.png?v=3" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="manifest.json?v=5" />
+  <link rel="manifest" href="manifest.json?v=13" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3080,8 +3080,15 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         }
         return;
       }
+      if(action==="install-pwa"){await triggerPWAInstall();return;}
+      if(action==="open-ai-history"){aiHistoryOpen=true;aiError="";render();await loadAISavedChats();return;}
+      if(action==="back-ai-chat"){aiHistoryOpen=false;aiHistoryMessage="";render();return;}
+      if(action==="save-ai-chat"){await saveCurrentAIChat(true);return;}
+      if(action==="new-ai-chat"){await startNewAIChat();return;}
+      if(action==="open-ai-saved-chat"){await openAISavedChat(String(el.dataset.chatId||""));return;}
+      if(action==="delete-ai-saved-chat"){await deleteAISavedChat(String(el.dataset.chatId||""));return;}
       if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";render();return;}
-      if(action==="toggle-ai-web-search"){aiWebSearchEnabled=!aiWebSearchEnabled;localStorage.setItem(K.aiWebSearchEnabled,String(aiWebSearchEnabled));render();return;}
+      if(action==="toggle-ai-web-search"){aiWebSearchEnabled=false;localStorage.removeItem(K.aiWebSearchEnabled);render();return;}
       if(action==="ai-start-voice"){startAISpeechInput();return;}
       if(action==="ai-receipt"){if(activeTrip()?.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}document.getElementById("ai-receipt-input")?.click();return;}
       if(action==="remove-ai-receipt"){aiReceiptImageDataUrl="";aiReceiptImageName="";render();return;}
@@ -3327,9 +3334,22 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
   window.addEventListener("offline",()=>{offline=true;render();});
 
 
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredPwaInstallPrompt = event;
+    pwaIsInstalled = false;
+    render();
+  });
+  window.addEventListener("appinstalled", () => {
+    pwaIsInstalled = true;
+    deferredPwaInstallPrompt = null;
+    pwaInstallMessage = "Urlaubassistent wurde als App installiert.";
+    render();
+  });
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=12").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=13").catch(() => {});
     }, { once: true });
   }
 
