@@ -1590,7 +1590,11 @@
               <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">${icon("sparkles","h-5 w-5")}</div>
               <div><div class="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Reise-KI</div><div class="text-lg font-bold tracking-tight">Urlaubassistent KI</div></div>
             </div>
-            <button type="button" data-action="toggle-ai" aria-label="KI schließen" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-5 w-5")}</button>
+            <div class="flex items-center gap-1.5">
+              <button type="button" data-action="toggle-ai-history" aria-label="Gespeicherte Chats öffnen" title="Gespeicherte Chats" class="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-white/85 transition hover:bg-white/12">${icon("messages-square","h-4.5 w-4.5")}</button>
+              <button type="button" data-action="new-ai-chat" aria-label="Neuen Chat beginnen" title="Neuer Chat" class="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-white/85 transition hover:bg-white/12">${icon("plus","h-4.5 w-4.5")}</button>
+              <button type="button" data-action="toggle-ai" aria-label="KI schließen" title="KI schließen" class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-4.5 w-4.5")}</button>
+            </div>
           </div>
           <div class="mt-3 flex items-center gap-2 text-xs text-white/60"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${activeTrip()? `Aktiver Urlaub: ${esc(activeTrip().name)}` : "Noch kein Urlaub ausgewählt"}</div>
           <div class="mt-3 flex items-start gap-2 rounded-2xl border border-emerald-300/15 bg-white/[0.06] p-3">
@@ -1603,11 +1607,14 @@
         </div>
 
         <div id="ai-chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
+          ${aiChatHistoryOpen ? aiSavedChatsHTML() : ""}
+          <div class="${aiChatHistoryOpen ? "hidden" : ""}">
           ${aiMessages.length===1 ? `<div class="mb-3">${aiQuickPromptsHTML()}</div>` : ""}
           ${bubbles}
           ${aiLoading ? `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="ai-thinking-card flex min-w-0 flex-1 items-center gap-3 rounded-3xl rounded-bl-lg px-4 py-3"><div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600/8 text-blue-600">${icon("sparkles","h-5 w-5")}</div><div class="min-w-0 flex-1"><div id="ai-thinking-label" class="ai-thinking-text text-sm font-bold tracking-tight">${esc(aiThinkingStatus)}</div><div class="mt-1 text-[11px] leading-4 text-slate-500">Ich bereite deine Antwort vor</div><div class="mt-2 flex items-center gap-1.5"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div></div></div></div>` : ""}
           ${aiError ? `<div class="rounded-2xl bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-700 ring-1 ring-rose-100">${esc(aiError)}</div>` : ""}
           <div class="ai-chat-disclaimer">Urlaubassistent KI kann Fehler machen. Überprüfe wichtige Informationen vor Buchungen und Entscheidungen.</div>
+          </div>
         </div>
 
         <div class="shrink-0 border-t border-slate-200 bg-white/92 p-3 backdrop-blur-xl sm:p-4">
@@ -1699,6 +1706,7 @@
     }
     aiInput = "";
     aiError = "";
+    aiChatHistoryOpen = false;
     aiMessages = [...aiMessages, {role:"user", content:input}];
     saveAIChatHistory();
     aiLoading = true;
@@ -2992,7 +3000,11 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         }
         return;
       }
-      if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";render();return;}
+      if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";if(aiOpen)loadAIChatHistory();render();return;}
+      if(action==="toggle-ai-history"){aiChatHistoryOpen=!aiChatHistoryOpen;aiError="";if(aiChatHistoryOpen)await loadAISavedChats();render();return;}
+      if(action==="new-ai-chat"){await startNewAIChat();return;}
+      if(action==="back-to-ai-chat"){aiChatHistoryOpen=false;render();return;}
+      if(action==="open-ai-saved-chat"){await openAISavedChat(el.dataset.chatId);return;}
       if(action==="toggle-ai-web-search"){aiWebSearchEnabled=!aiWebSearchEnabled;localStorage.setItem(K.aiWebSearchEnabled,String(aiWebSearchEnabled));render();return;}
       if(action==="ai-start-voice"){startAISpeechInput();return;}
       if(action==="ai-receipt"){if(activeTrip()?.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}document.getElementById("ai-receipt-input")?.click();return;}
