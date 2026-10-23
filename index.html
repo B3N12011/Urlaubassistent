@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
   <link rel="icon" type="image/png" href="/icon-192.png?v=14" />
-  <link rel="apple-touch-icon" href="/icon-192.png?v=13" />
+  <link rel="apple-touch-icon" href="/icon-192.png?v=14" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -2184,7 +2184,8 @@
     const label = document.getElementById("ai-chat-save-status");
     if (label) {
       label.textContent = aiChatSaveStatus;
-      label.className = "mt-1 text-center text-[10px] leading-4 font-semibold " + (aiChatSaveStatus.toLowerCase().includes("fehlgeschlagen") ? "text-amber-600" : /gespeichert/i.test(aiChatSaveStatus) ? "text-emerald-600" : "text-slate-500");
+      const statusLower = aiChatSaveStatus.toLowerCase();
+      label.className = "mt-1 text-center text-[10px] leading-4 font-semibold " + (statusLower.includes("fehlgeschlagen") ? "text-amber-600" : statusLower.includes("synchronisiere") ? "text-slate-500" : /gespeichert/i.test(aiChatSaveStatus) ? "text-emerald-600" : "text-slate-500");
     }
   }
 
