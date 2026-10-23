@@ -233,6 +233,7 @@
   let aiSearchQuotaRemaining = null;
   let aiWebSearchEnabled = false;
   let aiChatLoadedStorageKey = "";
+  let aiChatCloudSaveQueue = Promise.resolve();
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
@@ -1614,7 +1615,7 @@
             <button type="button" data-action="send-ai" ${aiLoading||aiReceiptProcessing?"disabled":""} aria-label="Nachricht senden" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">${icon("arrow-up","h-5 w-5")}</button>
           </div>
           <div class="mt-2 text-center text-[10px] leading-4 text-slate-400">${aiListening?"Mikrofon aktiv – sprich jetzt.":aiQuotaRemaining === null ? "10 KI-Fragen pro Tag · " : `${aiQuotaRemaining} KI-Fragen heute noch · `}Zum Eintragen per Sprache auf das Mikrofon tippen. Gespeichert wird erst nach deiner Bestätigung.</div>
-          <div class="mt-1 text-center text-[9px] leading-4 text-slate-400">Chat-Verlauf bleibt auf diesem Gerät gespeichert. Spracheingabe hängt vom Browser ab und kann extern verarbeitet werden.</div>
+          <div class="mt-1 text-center text-[9px] leading-4 text-slate-400">Chat-Verlauf wird pro Urlaub mit deinem Konto synchronisiert und zusätzlich auf diesem Gerät gespeichert. Spracheingabe hängt vom Browser ab und kann extern verarbeitet werden.</div>
         </div>
       </div>
     </div>`;
@@ -1806,7 +1807,7 @@
   function aiInputToolsHTML() {
     let preview="";
     if(aiReceiptImageDataUrl)preview='<div class="mb-2 flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-2"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700">'+icon("receipt-text","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="truncate text-xs font-semibold text-slate-800">'+esc(aiReceiptImageName||"Kassenbonfoto bereit")+'</div><div class="text-[10px] text-slate-500">Wird zur Analyse an den KI-Dienst übertragen</div></div><button type="button" data-action="remove-ai-receipt" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white" aria-label="Kassenbonfoto entfernen">'+icon("x","h-4 w-4")+'</button></div>';
-    return preview+'<div class="mb-2 flex gap-2 overflow-x-auto pb-1"><button type="button" data-action="ai-receipt" '+(aiReceiptProcessing||aiLoading?"disabled":"")+' class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-40">'+icon("camera","h-4 w-4")+'Kassenbon fotografieren</button><button type="button" data-action="ai-multiple-expenses" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("list-checks","h-4 w-4")+'Mehrere Ausgaben</button><button type="button" data-action="ai-trip-manage" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("calendar-check","h-4 w-4")+'Urlaub verwalten</button></div>' +
+    return preview+'<div class="mb-2 flex gap-2 overflow-x-auto pb-1"><button type="button" data-action="ai-start-voice" aria-label="Ausgaben einsprechen" title="Ausgaben per Sprache eintragen" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-600 px-3 py-2 text-[11px] font-bold text-white shadow-sm transition hover:bg-blue-700">'+icon("mic","h-4 w-4")+(aiListening?"Sprache stoppen":"Ausgaben einsprechen")+'</button><button type="button" data-action="ai-receipt" '+(aiReceiptProcessing||aiLoading?"disabled":"")+' class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-40">'+icon("camera","h-4 w-4")+'Kassenbon fotografieren</button><button type="button" data-action="ai-multiple-expenses" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("list-checks","h-4 w-4")+'Mehrere Ausgaben</button><button type="button" data-action="ai-trip-manage" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("calendar-check","h-4 w-4")+'Urlaub verwalten</button></div>' +
     (aiReceiptProcessing?'<div class="mb-2 text-[10px] text-blue-600">Kassenbonfoto wird vorbereitet…</div>':'')+
     '<div class="mb-2 text-center text-[9px] leading-4 text-slate-400">Vorgeschlagene Änderungen werden vor dem Speichern angezeigt. Kassenbonbilder werden zur Analyse an den KI-Dienst übertragen.</div><input id="ai-receipt-input" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Kassenbonfoto auswählen" />';
   }
@@ -2090,6 +2091,25 @@
     };
   }
 
+  function restoreAIChatMessages(storedMessages) {
+    return (Array.isArray(storedMessages) ? storedMessages : []).slice(-60).map(message => {
+      if (!message || !["user","assistant"].includes(message.role) || typeof message.content !== "string") return null;
+      const item = {role:message.role,content:message.content.slice(0,7000)};
+      if (Array.isArray(message.sources)) item.sources = message.sources.slice(0,3);
+      if (message.webSearchRequested) item.webSearchRequested = true;
+      if (message.webSearchEligible) item.webSearchEligible = true;
+      if (message.webSearchBlockedReason) item.webSearchBlockedReason = String(message.webSearchBlockedReason).slice(0,32);
+      if (Array.isArray(message.followUps)) item.followUps = message.followUps.slice(0,3);
+      if (message.pendingActionDiscarded) {
+        item.content += "\n\n*Ein offener Änderungsentwurf wurde beim Neuladen aus Sicherheitsgründen verworfen. Bitte fordere ihn erneut an; gespeichert wurde noch nichts.*";
+        item.actionsDismissed = true;
+      }
+      if (message.actionsApplied) item.actionsApplied = true;
+      if (message.actionsDismissed) item.actionsDismissed = true;
+      return item;
+    }).filter(Boolean);
+  }
+
   function saveAIChatHistory() {
     const key = aiChatStorageKey();
     if (!key) return;
@@ -2114,40 +2134,76 @@
         if (message.actionsDismissed) stored.actionsDismissed = true;
         return stored;
       });
-      localStorage.setItem(key,JSON.stringify({version:1,savedAt:new Date().toISOString(),messages}));
+      const savedAt = new Date().toISOString();
+      const snapshot = {version:1,savedAt,messages};
+      localStorage.setItem(key,JSON.stringify(snapshot));
       aiChatLoadedStorageKey = key;
+
+      if (session?.user?.id) {
+        const trip = activeTrip();
+        const scopeKey = trip?.id ? "trip:" + trip.id : "general";
+        const row = {user_id:session.user.id,scope_key:scopeKey,trip_id:trip?.id || null,messages,updated_at:savedAt};
+        aiChatCloudSaveQueue = aiChatCloudSaveQueue.catch(()=>{}).then(async()=>{
+          const {error:cloudError} = await supabase.from("ai_chat_history").upsert(row,{onConflict:"user_id,scope_key"});
+          if (cloudError) console.warn("AI cloud history save failed; local history is kept",cloudError.message || "");
+        });
+      }
     } catch(e) {
       console.warn("AI chat history could not be stored locally",e?.message || "");
     }
   }
 
-  function loadAIChatHistory(force = false) {
+  async function loadAIChatHistory(force = false) {
     const key = aiChatStorageKey();
-    if (!key) return;
+    if (!key || !session?.user?.id) return;
     if (!force && key === aiChatLoadedStorageKey) return;
     aiChatLoadedStorageKey = key;
+    const trip = activeTrip();
+    const scopeKey = trip?.id ? "trip:" + trip.id : "general";
+    let localSnapshot = null;
+    let localMessages = [];
     try {
-      const parsed = JSON.parse(localStorage.getItem(key) || "null");
-      const storedMessages = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.messages) ? parsed.messages : []);
-      const restored = storedMessages.slice(-60).map(message => {
-        if (!message || !["user","assistant"].includes(message.role) || typeof message.content !== "string") return null;
-        const item = {role:message.role,content:message.content.slice(0,7000)};
-        if (Array.isArray(message.sources)) item.sources = message.sources.slice(0,3);
-        if (message.webSearchRequested) item.webSearchRequested = true;
-        if (message.webSearchEligible) item.webSearchEligible = true;
-        if (message.webSearchBlockedReason) item.webSearchBlockedReason = String(message.webSearchBlockedReason).slice(0,32);
-        if (Array.isArray(message.followUps)) item.followUps = message.followUps.slice(0,3);
-        if (message.pendingActionDiscarded) {
-          item.content += "\n\n*Ein offener Änderungsentwurf wurde beim Neuladen aus Sicherheitsgründen verworfen. Bitte fordere ihn erneut an; gespeichert wurde noch nichts.*";
-          item.actionsDismissed = true;
-        }
-        if (message.actionsApplied) item.actionsApplied = true;
-        if (message.actionsDismissed) item.actionsDismissed = true;
-        return item;
-      }).filter(Boolean);
-      aiMessages = restored.length ? restored : [defaultAIChatMessage()];
-      if (!storedMessages.length) saveAIChatHistory();
+      localSnapshot = JSON.parse(localStorage.getItem(key) || "null");
+      localMessages = restoreAIChatMessages(Array.isArray(localSnapshot) ? localSnapshot : localSnapshot?.messages);
+      if (localMessages.length) aiMessages = localMessages;
     } catch {
+      localSnapshot = null;
+      localMessages = [];
+    }
+
+    let cloudLoaded = false;
+    try {
+      const {data,error:cloudError} = await supabase.from("ai_chat_history")
+        .select("messages,updated_at")
+        .eq("user_id",session.user.id)
+        .eq("scope_key",scopeKey)
+        .maybeSingle();
+      if (cloudError) throw cloudError;
+      if (aiChatStorageKey() !== key) return;
+
+      const cloudMessages = restoreAIChatMessages(data?.messages);
+      const localTime = Date.parse(String(localSnapshot?.savedAt || ""));
+      const cloudTime = Date.parse(String(data?.updated_at || ""));
+      const cloudIsNewer = cloudMessages.length && (!localMessages.length || (Number.isFinite(cloudTime) && (!Number.isFinite(localTime) || cloudTime > localTime)));
+      if (cloudIsNewer) {
+        aiMessages = cloudMessages;
+        localStorage.setItem(key,JSON.stringify({version:1,savedAt:data.updated_at,messages:data.messages}));
+        aiChatLoadedStorageKey = key;
+        cloudLoaded = true;
+      } else if (localMessages.length) {
+        // Keep newer local changes and reconcile them to the account history.
+        saveAIChatHistory();
+        cloudLoaded = true;
+      } else if (cloudMessages.length) {
+        aiMessages = cloudMessages;
+        localStorage.setItem(key,JSON.stringify({version:1,savedAt:data.updated_at,messages:data.messages}));
+        cloudLoaded = true;
+      }
+    } catch(e) {
+      console.warn("AI cloud history could not be loaded; local history is used",e?.message || "");
+    }
+
+    if (!localMessages.length && !cloudLoaded) {
       aiMessages = [defaultAIChatMessage()];
       saveAIChatHistory();
     }
@@ -2217,7 +2273,7 @@
       if (!selectedTripId && trips[0]) selectedTripId = trips[0].id;
       if (selectedTripId && !trips.some(t=>t.id===selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
-      loadAIChatHistory();
+      await loadAIChatHistory();
     } catch (e) {
       error = "Daten konnten nicht geladen werden. Überprüfe ggf. deine Internetverbindung.";
     } finally {
