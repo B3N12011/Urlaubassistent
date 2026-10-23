@@ -2359,7 +2359,8 @@
       const cloudIsNewer = cloudMessages.length && (!localMessages.length || (Number.isFinite(cloudTime) && (!Number.isFinite(localTime) || cloudTime > localTime)));
       if (cloudIsNewer) {
         aiMessages = cloudMessages;
-        localStorage.setItem(key,JSON.stringify({version:1,savedAt:data.updated_at,messages:data.messages,conversationId:aiCurrentConversationId,newChat:localSnapshot?.newChat===true&&!aiCurrentConversationId}));
+        localSnapshot = {version:1,savedAt:data.updated_at,messages:data.messages,conversationId:aiCurrentConversationId,newChat:localSnapshot?.newChat===true&&!aiCurrentConversationId};
+        localStorage.setItem(key,JSON.stringify(localSnapshot));
         aiChatLoadedStorageKey = key;
         cloudLoaded = true;
       } else if (localMessages.length) {
@@ -2367,7 +2368,8 @@
         cloudLoaded = true;
       } else if (cloudMessages.length) {
         aiMessages = cloudMessages;
-        localStorage.setItem(key,JSON.stringify({version:1,savedAt:data.updated_at,messages:data.messages,conversationId:aiCurrentConversationId,newChat:localSnapshot?.newChat===true&&!aiCurrentConversationId}));
+        localSnapshot = {version:1,savedAt:data.updated_at,messages:data.messages,conversationId:aiCurrentConversationId,newChat:localSnapshot?.newChat===true&&!aiCurrentConversationId};
+        localStorage.setItem(key,JSON.stringify(localSnapshot));
         cloudLoaded = true;
       }
     } catch(e) {
@@ -2389,9 +2391,22 @@
       aiCurrentConversationCreatedAt=currentChat.created_at||currentChat.updated_at||new Date().toISOString();
       const activeConversationKey=aiConversationStorageKey();
       if(activeConversationKey)localStorage.setItem(activeConversationKey,aiCurrentConversationId);
-      aiMessages=restoreAIChatMessages(currentChat.messages);
-      if(!aiMessages.length)aiMessages=[defaultAIChatMessage()];
-      localStorage.setItem(key,JSON.stringify({version:1,savedAt:currentChat.updated_at,conversationId:currentChat.id,messages:currentChat.messages}));
+      const freshestSnapshot = (() => { try { return JSON.parse(localStorage.getItem(key)||"null"); } catch { return null; } })();
+      const freshestLocalMessages = restoreAIChatMessages(freshestSnapshot?.messages);
+      const localTime = Date.parse(String(freshestSnapshot?.savedAt||""));
+      const savedTime = Date.parse(String(currentChat.updated_at||""));
+      const localIsNewer = String(freshestSnapshot?.conversationId||"")===String(currentChat.id) &&
+        freshestLocalMessages.some(message=>message.role==="user") &&
+        Number.isFinite(localTime) && (!Number.isFinite(savedTime)||localTime>savedTime);
+      if(localIsNewer) {
+        aiMessages=freshestLocalMessages;
+        saveAIChatHistory();
+      } else {
+        aiMessages=restoreAIChatMessages(currentChat.messages);
+        if(!aiMessages.length)aiMessages=[defaultAIChatMessage()];
+        localSnapshot={version:1,savedAt:currentChat.updated_at,conversationId:currentChat.id,messages:currentChat.messages};
+        localStorage.setItem(key,JSON.stringify(localSnapshot));
+      }
     } else if(aiMessages.some(message=>message.role==="user")) {
       saveAIChatHistory();
     } else {
