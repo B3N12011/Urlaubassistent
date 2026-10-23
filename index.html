@@ -1696,7 +1696,11 @@
     }
     aiInput = "";
     aiError = "";
+    if(!aiActiveChatId)aiActiveChatId=newAIChatId();
+    if(!aiMessages.some(message=>message.role==="user"))aiActiveTripId=activeTrip()?.id||null;
+    aiChatFreshStart=false;
     aiMessages = [...aiMessages, {role:"user", content:input}];
+    void persistAIChat();
     aiLoading = true;
     startAIThinking(input);
     render();
@@ -1742,6 +1746,7 @@
         webSearchBlockedReason:String(data?.webSearchBlockedReason || ""),
         followUps:aiFollowUpsFor(input)
       }];
+      void persistAIChat();
     } catch (e) {
       if (!aiError) {
         aiError = e?.message === "empty-ai-reply"
@@ -2030,9 +2035,9 @@
     let preview="";
     if(aiReceiptImageDataUrl)preview='<div class="mb-2 flex items-center gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-2"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-blue-700">'+icon("receipt-text","h-4 w-4")+'</span><div class="min-w-0 flex-1"><div class="truncate text-xs font-semibold text-slate-800">'+esc(aiReceiptImageName||"Kassenbonfoto bereit")+'</div><div class="text-[10px] text-slate-500">Wird zur Analyse an den KI-Dienst übertragen</div></div><button type="button" data-action="remove-ai-receipt" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white" aria-label="Kassenbonfoto entfernen">'+icon("x","h-4 w-4")+'</button></div>';
     const voiceClass=aiListening?"border-rose-200 bg-rose-50 text-rose-700":"border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700";
-    return preview+'<div class="mb-2 flex gap-2 overflow-x-auto pb-1"><button type="button" data-action="ai-start-voice" aria-label="Spracheingabe starten" class="flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold '+voiceClass+'">'+icon("mic","h-4 w-4")+(aiListening?"Höre zu…":"Sprechen")+'</button><button type="button" data-action="ai-receipt" '+(aiReceiptProcessing||aiLoading?"disabled":"")+' class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-40">'+icon("camera","h-4 w-4")+'Kassenbon</button><button type="button" data-action="ai-multiple-expenses" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("list-checks","h-4 w-4")+'Mehrere Ausgaben</button><button type="button" data-action="ai-trip-manage" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("calendar-check","h-4 w-4")+'Urlaub verwalten</button></div>' +
+    return preview+'<div class="mb-2 flex gap-2 overflow-x-auto pb-1"><button type="button" data-action="ai-start-voice" aria-label="Spracheingabe starten" class="flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-bold '+voiceClass+'">'+icon("mic","h-4 w-4")+(aiListening?"Höre zu…":"Ausgaben einsprechen")+'</button><button type="button" data-action="ai-receipt" '+(aiReceiptProcessing||aiLoading?"disabled":"")+' class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700 disabled:opacity-40">'+icon("camera","h-4 w-4")+'Kassenbon</button><button type="button" data-action="ai-multiple-expenses" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("list-checks","h-4 w-4")+'Mehrere Ausgaben</button><button type="button" data-action="ai-trip-manage" class="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:border-blue-200 hover:text-blue-700">'+icon("calendar-check","h-4 w-4")+'Urlaub verwalten</button></div>' +
     (aiListening?'<div class="mb-2 text-[10px] text-rose-600">Mikrofon aktiv – sprich jetzt.</div>':aiReceiptProcessing?'<div class="mb-2 text-[10px] text-blue-600">Kassenbonfoto wird vorbereitet…</div>':'')+
-    '<div class="mb-2 text-center text-[9px] leading-4 text-slate-400">Spracherkennung kann je nach Browser extern verarbeitet werden. Änderungen werden erst nach deiner Bestätigung gespeichert.</div><input id="ai-receipt-input" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Kassenbonfoto auswählen" />';
+    '<div class="mb-2 text-[10px] leading-4 text-slate-500">Beispiel: „Trag 34,70 € bei Aldi für Essen ein.“ Der erkannte Text wird erst nach deinem Absenden verarbeitet; gespeichert wird nur nach deiner Bestätigung.</div><div class="mb-2 text-center text-[9px] leading-4 text-slate-400">Die Spracherkennung kann je nach Browser über einen externen Dienst laufen.</div><input id="ai-receipt-input" type="file" accept="image/*" capture="environment" class="hidden" aria-label="Kassenbonfoto auswählen" />';
   }
 
   async function optimizeReceiptImage(file) {
@@ -2099,14 +2104,14 @@
       if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;message.actions.completePackingIds=[];}
       message.actions=null;message.actionsApplied=true;await loadTrips();
       const saved=[];if(counts.expenses)saved.push(counts.expenses+" "+(counts.expenses===1?"Ausgabe":"Ausgaben"));if(counts.tolls)saved.push(counts.tolls+" Gebühreneinträge");if(counts.packing)saved.push(counts.packing+" Packlistenpunkte");if(counts.todos)saved.push(counts.todos+" To-dos");if(counts.doneTodos)saved.push(counts.doneTodos+" To-dos abgehakt");if(counts.donePacking)saved.push(counts.donePacking+" Packlistenpunkte abgehakt");
-      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];render();
+      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];void persistAIChat();render();
     }catch(e){aiError="Nicht alle Änderungen konnten gespeichert werden. Bitte prüfe die Listen, bevor du es erneut versuchst. "+(e?.message||"");render();}
     finally{aiActionsApplying=false;render();}
   }
 
   function discardAIActions(messageIndex) {
     const message=aiMessages[messageIndex];if(!message?.actions)return;
-    message.actions=null;message.actionsDismissed=true;render();
+    message.actions=null;message.actionsDismissed=true;void persistAIChat();render();
   }
 
   function appHTML() {
@@ -2907,8 +2912,10 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         }
         return;
       }
-      if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";render();return;}
+      if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";if(aiOpen){if(!aiActiveChatId){aiActiveChatId=newAIChatId();aiActiveTripId=activeTrip()?.id||null;}void loadAIChatHistory();}render();return;}
       if(action==="toggle-ai-history"){aiHistoryOpen=!aiHistoryOpen;if(aiHistoryOpen)void loadAIChatHistory();render();return;}
+      if(action==="new-ai-chat"){await startNewAIChat();return;}
+      if(action==="load-ai-chat"){await openSavedAIChat(el.dataset.chatId||"");return;}
       if(action==="ai-start-voice"){startAISpeechInput();return;}
       if(action==="ai-receipt"){if(activeTrip()?.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}document.getElementById("ai-receipt-input")?.click();return;}
       if(action==="remove-ai-receipt"){aiReceiptImageDataUrl="";aiReceiptImageName="";render();return;}
