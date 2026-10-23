@@ -2146,7 +2146,7 @@
 
   function aiChatTitleFromMessages(messages) {
     const first = (messages || []).find(message => message.role === "user" && String(message.content || "").trim());
-    const title = String(first?.content || "Neuer Urlaub-Chat").replace(/\\s+/g," ").trim();
+    const title = String(first?.content || "Neuer Urlaub-Chat").replace(/\s+/g," ").trim();
     return title.length > 56 ? title.slice(0,53).trimEnd() + "…" : (title || "Neuer Urlaub-Chat");
   }
 
@@ -2385,6 +2385,8 @@
       if(aiCurrentChatId===id){
         aiCurrentChatId="";
         const key=aiChatCurrentIdStorageKey();if(key)localStorage.removeItem(key);
+        aiMessages=[defaultAIChatMessage()];aiInput="";
+        saveAIChatHistory();
       }
       aiSavedChatsError="";
       render();
