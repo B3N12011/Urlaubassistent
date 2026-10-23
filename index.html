@@ -696,6 +696,37 @@
     </button>`;
   }
 
+  function pwaInstallButtonHTML() {
+    if (pwaIsInstalled) return "";
+    return '<button type="button" data-action="install-pwa" aria-label="Urlaubassistent installieren" title="Urlaubassistent installieren" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 text-white transition hover:bg-white/20 active:scale-95">' +
+      icon("download","h-5 w-5") + '<span class="sr-only">App installieren</span></button>';
+  }
+
+  async function triggerPWAInstall() {
+    if (pwaIsInstalled) {
+      pwaInstallMessage = "Urlaubassistent ist bereits als App installiert.";
+      render();
+      return;
+    }
+    if (!deferredPwaInstallPrompt) {
+      pwaInstallMessage = "Der Browser bietet gerade keinen Installationsdialog an. Öffne die Website direkt in Chrome und lade sie neu. Prüfe im Menü ⋮, ob „App installieren“ oder „Zum Startbildschirm hinzufügen“ verfügbar ist. Wenn dieselbe Fehlermeldung bleibt, muss der Browser das aktuelle Manifest und die App-Icons neu prüfen.";
+      render();
+      return;
+    }
+    const promptEvent = deferredPwaInstallPrompt;
+    deferredPwaInstallPrompt = null;
+    try {
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      pwaInstallMessage = choice && choice.outcome === "accepted"
+        ? "Die Installationsanfrage wurde angenommen. Folge den angezeigten Schritten deines Browsers."
+        : "Die Installation wurde nicht abgeschlossen. Du kannst es jederzeit erneut versuchen.";
+    } catch {
+      pwaInstallMessage = "Der Browser konnte die Installation nicht starten. Öffne die Website direkt im Browser und versuche es über dessen Menü.";
+    }
+    render();
+  }
+
   function topBarHTML(title, subtitle) {
     const trip = activeTrip();
     return `<div class="mb-6 rounded-[2rem] bg-slate-900 p-4 text-white shadow-xl md:p-5">
@@ -707,12 +738,16 @@
           <h1 class="truncate text-2xl font-bold tracking-tight md:text-3xl">${esc(title)}</h1>
           <p class="mt-1 text-sm text-white/65">${esc(subtitle)}</p>
         </div>
-        <div class="hidden shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-white/70 sm:block">
-          <div>Ausgaben</div>
-          <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
+        <div class="flex shrink-0 items-center gap-2">
+          ${pwaInstallButtonHTML()}
+          <div class="hidden rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-white/70 sm:block">
+            <div>Ausgaben</div>
+            <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
+          </div>
         </div>
       </div>
       ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
+      ${pwaInstallMessage ? `<div class="mt-3 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs leading-5 text-white/85">${esc(pwaInstallMessage)}</div>` : ""}
     </div>`;
   }
 
