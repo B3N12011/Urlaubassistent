@@ -196,7 +196,8 @@
     reminderSentPrefix: "urlaubassistent-reminder-sent-",
     customExpenseCategoriesPrefix: "urlaubassistent-custom-expense-categories-",
     aiWebSearchEnabled: "urlaubassistent-ai-web-search-enabled",
-    aiChatPrefix: "urlaubassistent-ai-chat-"
+    aiChatPrefix: "urlaubassistent-ai-chat-",
+    aiChatCurrentIdPrefix: "urlaubassistent-ai-chat-current-"
   };
 
   const LIST_LIMIT = 5;
@@ -234,6 +235,13 @@
   let aiWebSearchEnabled = false;
   let aiChatLoadedStorageKey = "";
   let aiChatCloudSaveQueue = Promise.resolve();
+  let aiCurrentChatId = "";
+  let aiSavedChats = [];
+  let aiSavedChatsLoading = false;
+  let aiSavedChatsError = "";
+  let aiHistoryOpen = false;
+  let pwaInstallPromptEvent = null;
+  let pwaInstallHelpMessage = "";
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
@@ -2084,6 +2092,25 @@
     return K.aiChatPrefix + session.user.id + "-" + (trip?.id || "general");
   }
 
+  function aiChatCurrentIdStorageKey() {
+    const key = aiChatStorageKey();
+    return key ? K.aiChatCurrentIdPrefix + key.slice(K.aiChatPrefix.length) : "";
+  }
+
+  function newAIChatId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, ch => {
+      const r = Math.random() * 16 | 0;
+      return (ch === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  function aiChatTitleFromMessages(messages) {
+    const first = (messages || []).find(message => message.role === "user" && String(message.content || "").trim());
+    const title = String(first?.content || "Neuer Urlaub-Chat").replace(/\\s+/g," ").trim();
+    return title.length > 56 ? title.slice(0,53).trimEnd() + "…" : (title || "Neuer Urlaub-Chat");
+  }
+
   function defaultAIChatMessage() {
     return {
       role:"assistant",
@@ -2160,6 +2187,8 @@
     aiChatLoadedStorageKey = key;
     const trip = activeTrip();
     const scopeKey = trip?.id ? "trip:" + trip.id : "general";
+    const currentIdKey = aiChatCurrentIdStorageKey();
+    aiCurrentChatId = currentIdKey ? (localStorage.getItem(currentIdKey) || "") : "";
     let localSnapshot = null;
     let localMessages = [];
     try {
