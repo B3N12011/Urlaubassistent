@@ -242,6 +242,7 @@
   let aiChatHistoryOpen = false;
   let aiChatHistoryLoading = false;
   let aiChatHistoryError = "";
+  let aiChatSaveStatus = "Noch nicht gespeichert";
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
@@ -249,7 +250,8 @@
   let aiListening = false;
   let aiActionsApplying = false;
   let deferredPWAInstallPrompt = null;
-  let pwaInstalled = false;
+  let pwaInstallHelpOpen = false;
+  let pwaInstalled = Boolean((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true);
   let aiThinkingTimer = null;
   let aiThinkingStatus = "Ich schaue mir deinen Urlaub an";
   let aiMessages = [
@@ -712,7 +714,7 @@
           <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
         </div>
       </div>
-      ${deferredPWAInstallPrompt && !pwaInstalled ? `<button type="button" data-action="install-pwa" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">${icon("download","h-4 w-4")} App installieren</button>` : ""}
+      ${!pwaInstalled ? `<button type="button" data-action="install-pwa" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">${icon("download","h-4 w-4")} ${deferredPWAInstallPrompt ? "App installieren" : "Installationshilfe"}</button>${pwaInstallHelpOpen && !deferredPWAInstallPrompt ? `<div class="mt-2 rounded-xl border border-white/10 bg-black/15 p-3 text-[11px] leading-5 text-white/75"><strong class="text-white">Installation am Android-Handy</strong><br>Öffne die Seite direkt in Chrome (nicht in einer eingebetteten Vorschau). Tippe oben auf ⋮ und wähle „App installieren“ oder „Zum Startbildschirm hinzufügen“. Fehlt der Punkt auch dort, Seite neu laden und erneut versuchen; die Installation hängt davon ab, ob der Browser die aktuelle Manifest- und Icon-Version akzeptiert.</div>` : ""}` : ""}
       ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
     </div>`;
   }
@@ -1635,6 +1637,7 @@
             <button type="button" data-action="send-ai" ${aiLoading||aiReceiptProcessing?"disabled":""} aria-label="Nachricht senden" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">${icon("arrow-up","h-5 w-5")}</button>
           </div>
           <div class="mt-2 text-center text-[10px] leading-4 text-slate-400">${aiListening?"Mikrofon aktiv – sprich jetzt.":aiQuotaRemaining === null ? "10 KI-Fragen pro Tag · " : `${aiQuotaRemaining} KI-Fragen heute noch · `}Zum Eintragen per Sprache auf das Mikrofon tippen. Gespeichert wird erst nach deiner Bestätigung.</div>
+          <div id="ai-chat-save-status" class="mt-1 text-center text-[10px] leading-4 font-semibold ${aiChatSaveStatus.includes("fehlgeschlagen") ? "text-amber-600" : aiChatSaveStatus.includes("gespeichert") || aiChatSaveStatus.includes("Gespeichert") ? "text-emerald-600" : "text-slate-500"}">${esc(aiChatSaveStatus)}</div>
           <div class="mt-1 text-center text-[9px] leading-4 text-slate-400">Chat-Verlauf wird pro Urlaub mit deinem Konto synchronisiert und zusätzlich auf diesem Gerät gespeichert. Spracheingabe hängt vom Browser ab und kann extern verarbeitet werden.</div>
         </div>
       </div>
@@ -1761,7 +1764,7 @@
         webSearchBlockedReason:String(data?.webSearchBlockedReason || ""),
         followUps:aiFollowUpsFor(input)
       }];
-      saveAIChatHistory();
+      await saveAIChatHistory();
     } catch (e) {
       if (!aiError) {
         aiError = e?.message === "empty-ai-reply"
@@ -1772,7 +1775,7 @@
       stopAIThinking();
       aiLoading = false;
       if (aiReceiptImageDataUrl) { aiReceiptImageDataUrl = ""; aiReceiptImageName = ""; }
-      saveAIChatHistory();
+      await saveAIChatHistory();
       render();
       setTimeout(()=>{ const box=document.getElementById("ai-chat-messages"); if(box) box.scrollTop=box.scrollHeight; }, 0);
     }
@@ -2176,9 +2179,18 @@
     });
   }
 
+  function setAIChatSaveStatus(status) {
+    aiChatSaveStatus = String(status || "");
+    const label = document.getElementById("ai-chat-save-status");
+    if (label) {
+      label.textContent = aiChatSaveStatus;
+      label.className = "mt-1 text-center text-[10px] leading-4 font-semibold " + (aiChatSaveStatus.toLowerCase().includes("fehlgeschlagen") ? "text-amber-600" : /gespeichert/i.test(aiChatSaveStatus) ? "text-emerald-600" : "text-slate-500");
+    }
+  }
+
   function saveAIChatHistory() {
     const key = aiChatStorageKey();
-    if (!key) return;
+    if (!key) return Promise.resolve();
     try {
       const messages = messagesForAIStorage();
       const savedAt = new Date().toISOString();
@@ -2192,6 +2204,7 @@
       const snapshot = {version:1,savedAt,conversationId:aiCurrentConversationId,newChat:!hasUserMessages&&!aiCurrentConversationId,messages};
       localStorage.setItem(key,JSON.stringify(snapshot));
       aiChatLoadedStorageKey = key;
+      setAIChatSaveStatus(hasUserMessages ? "Lokal gespeichert · synchronisiere mit deinem Konto…" : "Neuer Chat");
 
       if (session?.user?.id) {
         const trip = activeTrip();
@@ -2210,19 +2223,32 @@
         aiChatCloudSaveQueue = aiChatCloudSaveQueue.catch(()=>{}).then(async()=>{
           const {error:legacyError} = await supabase.from("ai_chat_history").upsert(legacyRow,{onConflict:"user_id,scope_key"});
           if (legacyError) console.warn("AI cloud history save failed; local history is kept",legacyError.message || "");
-          if (!conversationRow) return;
+          if (!conversationRow) {
+            setAIChatSaveStatus(legacyError ? "Lokal gespeichert · Cloud-Sync fehlgeschlagen" : (hasUserMessages ? "In deinem Konto gespeichert" : "Bereit für deinen nächsten Chat"));
+            return;
+          }
           const {error:conversationError} = await supabase.from("ai_chat_conversations").upsert(conversationRow,{onConflict:"id"});
           if (conversationError) {
             console.warn("AI saved conversation could not be synced",conversationError.message || "");
+            setAIChatSaveStatus("Lokal gespeichert · Konto-Sync fehlgeschlagen");
             return;
           }
           aiSavedChats = [conversationRow,...aiSavedChats.filter(chat=>chat.id!==conversationRow.id)]
             .sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")))
             .slice(0,30);
+          setAIChatSaveStatus("In deinem Konto gespeichert");
+        }).catch(e=>{
+          console.warn("AI chat cloud save failed; local copy remains",e?.message || "");
+          setAIChatSaveStatus("Lokal gespeichert · Konto-Sync fehlgeschlagen");
         });
+      } else {
+        setAIChatSaveStatus(hasUserMessages ? "Nur auf diesem Gerät gespeichert · bitte anmelden, um zu synchronisieren" : "Bereit für deinen nächsten Chat");
       }
+      return aiChatCloudSaveQueue;
     } catch(e) {
       console.warn("AI chat history could not be stored locally",e?.message || "");
+      setAIChatSaveStatus("Speichern auf diesem Gerät fehlgeschlagen");
+      return Promise.resolve();
     }
   }
 
@@ -2234,6 +2260,7 @@
     }
     const requestKey=aiChatStorageKey();
     const trip=activeTrip();
+    await aiChatCloudSaveQueue.catch(()=>{});
     aiChatHistoryLoading=true;
     aiChatHistoryError="";
     render();
@@ -2299,7 +2326,7 @@
     aiChatHistoryOpen=false;
     aiError="";
     aiInput="";
-    saveAIChatHistory();
+    await saveAIChatHistory();
     render();
     setTimeout(()=>{const box=document.getElementById("ai-chat-messages");if(box)box.scrollTop=box.scrollHeight;},0);
   }
@@ -3023,12 +3050,18 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         return;
       }
       if(action==="install-pwa"){
-        if(!deferredPWAInstallPrompt){error="Der Browser bietet gerade keine Installation an. Öffne die App in Chrome und prüfe das Browsermenü.";render();return;}
+        if(!deferredPWAInstallPrompt){pwaInstallHelpOpen=!pwaInstallHelpOpen;error="";render();return;}
         const promptEvent=deferredPWAInstallPrompt;
-        await promptEvent.prompt();
-        const choice=await promptEvent.userChoice.catch(()=>({outcome:"dismissed"}));
+        try {
+          await promptEvent.prompt();
+          const choice=await promptEvent.userChoice.catch(()=>({outcome:"dismissed"}));
+          if(choice?.outcome==="accepted")pwaInstalled=true;
+          else pwaInstallHelpOpen=true;
+        } catch(e) {
+          pwaInstallHelpOpen=true;
+          error="Der Browser hat den Installationsdialog nicht geöffnet. Versuche es direkt in Chrome über ⋮."; 
+        }
         deferredPWAInstallPrompt=null;
-        if(choice?.outcome==="accepted")pwaInstalled=true;
         render();
         return;
       }
