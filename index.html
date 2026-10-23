@@ -1674,7 +1674,7 @@
             <button type="button" data-action="send-ai" ${aiLoading||aiReceiptProcessing?"disabled":""} aria-label="Nachricht senden" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white transition hover:bg-blue-700 disabled:opacity-40">${icon("arrow-up","h-5 w-5")}</button>
           </div>
           <div class="mt-2 text-center text-[10px] leading-4 text-slate-400">${aiListening?"Mikrofon aktiv – sprich jetzt.":aiQuotaRemaining === null ? "10 KI-Fragen pro Tag · " : `${aiQuotaRemaining} KI-Fragen heute noch · `}Zum Eintragen per Sprache auf das Mikrofon tippen. Gespeichert wird erst nach deiner Bestätigung.</div>
-          <div class="mt-1 text-center text-[9px] leading-4 text-slate-400">Chat-Verlauf wird pro Urlaub mit deinem Konto synchronisiert und zusätzlich auf diesem Gerät gespeichert. Spracheingabe hängt vom Browser ab und kann extern verarbeitet werden.</div>
+          <div id="ai-chat-sync-status" class="mt-1 text-center text-[9px] leading-4 text-slate-400">${esc(aiChatSaveStatus)} · Chat-Verlauf wird lokal und mit deinem Konto synchronisiert. Spracheingabe hängt vom Browser ab und kann extern verarbeitet werden.</div>
         </div>
       </div>
     </div>`;
@@ -2215,6 +2215,12 @@
     });
   }
 
+  function updateAIChatSaveStatus(status) {
+    aiChatSaveStatus = String(status || "");
+    const label = document.getElementById("ai-chat-sync-status");
+    if (label) label.textContent = aiChatSaveStatus;
+  }
+
   function saveAIChatHistory() {
     const key = aiChatStorageKey();
     if (!key) return;
@@ -2230,6 +2236,7 @@
       }
       const snapshot = {version:1,savedAt,conversationId:aiCurrentConversationId,newChat:!hasUserMessages&&!aiCurrentConversationId,messages};
       localStorage.setItem(key,JSON.stringify(snapshot));
+      updateAIChatSaveStatus(session?.user?.id ? "Synchronisiere mit deinem Konto…" : "Auf diesem Gerät gespeichert");
       aiChatLoadedStorageKey = key;
 
       if (session?.user?.id) {
@@ -2248,16 +2255,20 @@
         } : null;
         aiChatCloudSaveQueue = aiChatCloudSaveQueue.catch(()=>{}).then(async()=>{
           const {error:legacyError} = await supabase.from("ai_chat_history").upsert(legacyRow,{onConflict:"user_id,scope_key"});
-          if (legacyError) console.warn("AI cloud history save failed; local history is kept",legacyError.message || "");
-          if (!conversationRow) return;
+          if (legacyError) console.warn("AI cloud legacy history save failed; local history is kept",legacyError.message || "");
+          if (!conversationRow) { updateAIChatSaveStatus("Neuer Chat bereit"); return; }
           const {error:conversationError} = await supabase.from("ai_chat_conversations").upsert(conversationRow,{onConflict:"id"});
           if (conversationError) {
+            aiChatHistoryError = "Chat lokal gespeichert, aber die Kontosynchronisierung ist fehlgeschlagen. Prüfe deine Verbindung.";
+            updateAIChatSaveStatus("Lokal gespeichert · Kontosync fehlgeschlagen");
             console.warn("AI saved conversation could not be synced",conversationError.message || "");
             return;
           }
+          aiChatHistoryError = "";
+          updateAIChatSaveStatus("Mit deinem Konto gespeichert");
           aiSavedChats = [conversationRow,...aiSavedChats.filter(chat=>chat.id!==conversationRow.id)]
             .sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")))
-            .slice(0,30);
+            .slice(0,50);
         });
       }
     } catch(e) {
