@@ -196,7 +196,8 @@
     reminderSentPrefix: "urlaubassistent-reminder-sent-",
     customExpenseCategoriesPrefix: "urlaubassistent-custom-expense-categories-",
     aiWebSearchEnabled: "urlaubassistent-ai-web-search-enabled",
-    aiChatPrefix: "urlaubassistent-ai-chat-"
+    aiChatPrefix: "urlaubassistent-ai-chat-",
+    aiConversationListPrefix: "urlaubassistent-ai-conversation-list-"
   };
 
   const LIST_LIMIT = 5;
@@ -234,6 +235,15 @@
   let aiWebSearchEnabled = false;
   let aiChatLoadedStorageKey = "";
   let aiChatCloudSaveQueue = Promise.resolve();
+  let aiActiveChatId = null;
+  let aiActiveTripId = null;
+  let aiConversationList = [];
+  let aiConversationHistoryOpen = false;
+  let aiConversationListLoading = false;
+  let aiConversationListLoadedKey = "";
+  let aiConversationLoadedUser = "";
+  let aiConversationSaveQueue = Promise.resolve();
+  let aiConversationFreshStart = false;
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
@@ -245,7 +255,7 @@
   let aiMessages = [
     {
       role: "assistant",
-      content: "Hi! Ich bin dein Reise-KI-Assistent. Ich kann dir bei deinem Urlaub, Budget, Ausgaben, Packliste und Reiseplanung helfen."
+      content: "Hallo! Ich bin dein persönlicher Urlaubsmanager. Du kannst mich nach deinem Budget fragen, Ausgaben einsprechen, einen Kassenbon fotografieren oder Packliste und To-dos verwalten. Ich zeige Änderungen zuerst zum Prüfen an."
     }
   ];
 
@@ -1582,9 +1592,13 @@
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">${icon("sparkles","h-5 w-5")}</div>
-              <div><div class="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Reise-KI</div><div class="text-lg font-bold tracking-tight">Urlaubassistent KI</div></div>
+              <div><div class="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">Reise-KI</div><div class="text-lg font-bold tracking-tight">Urlaubassistent KI</div><div class="mt-0.5 text-[10px] text-white/55">Dein persönlicher Urlaubsmanager</div></div>
             </div>
-            <button type="button" data-action="toggle-ai" aria-label="KI schließen" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-5 w-5")}</button>
+            <div class="flex shrink-0 items-center gap-1">
+              <button type="button" data-action="toggle-ai-conversation-history" aria-label="Gespeicherte Chats" title="Chatverlauf" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/85 transition hover:bg-white/15">${icon("messages-square","h-5 w-5")}</button>
+              <button type="button" data-action="new-ai-conversation" aria-label="Neuen Chat starten" title="Neuer Chat" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/85 transition hover:bg-white/15">${icon("square-pen","h-5 w-5")}</button>
+              <button type="button" data-action="toggle-ai" aria-label="KI schließen" class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/80 hover:bg-white/15">${icon("x","h-5 w-5")}</button>
+            </div>
           </div>
           <div class="mt-3 flex items-center gap-2 text-xs text-white/60"><span class="h-2 w-2 rounded-full bg-emerald-400"></span>${activeTrip()? `Aktiver Urlaub: ${esc(activeTrip().name)}` : "Noch kein Urlaub ausgewählt"}</div>
           <div class="mt-3 flex items-start gap-2 rounded-2xl border border-emerald-300/15 bg-white/[0.06] p-3">
@@ -1597,6 +1611,7 @@
         </div>
 
         <div id="ai-chat-messages" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
+          ${aiConversationHistoryOpen ? aiConversationHistoryHTML() : ""}
           ${aiMessages.length===1 ? `<div class="mb-3">${aiQuickPromptsHTML()}</div>` : ""}
           ${bubbles}
           ${aiLoading ? `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="ai-thinking-card flex min-w-0 flex-1 items-center gap-3 rounded-3xl rounded-bl-lg px-4 py-3"><div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-600/8 text-blue-600">${icon("sparkles","h-5 w-5")}</div><div class="min-w-0 flex-1"><div id="ai-thinking-label" class="ai-thinking-text text-sm font-bold tracking-tight">${esc(aiThinkingStatus)}</div><div class="mt-1 text-[11px] leading-4 text-slate-500">Ich bereite deine Antwort vor</div><div class="mt-2 flex items-center gap-1.5"><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span><span class="ai-thinking-dot"></span></div></div></div></div>` : ""}
