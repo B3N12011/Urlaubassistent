@@ -2337,7 +2337,7 @@
       chat=aiSavedChats.find(item=>String(item.id)===wanted);
     }
     if(!chat){aiChatHistoryError="Dieser gespeicherte Chat wurde nicht gefunden.";render();return;}
-    saveAIChatHistory();
+    if(aiMessages.some(message=>message.role==="user")) saveAIChatHistory();
     await aiChatCloudSaveQueue.catch(()=>{});
     if(chat.trip_id && trips.some(t=>String(t.id)===String(chat.trip_id))){
       selectedTripId=String(chat.trip_id);
