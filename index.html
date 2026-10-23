@@ -2219,6 +2219,203 @@
     }
   }
 
+  function aiSavedChatTitleFromMessages(messages) {
+    const firstUser = (Array.isArray(messages) ? messages : []).find(message => message && message.role === "user" && String(message.content || "").trim());
+    const title = String(firstUser ? firstUser.content : "").replace(/\s+/g, " ").trim();
+    return (title || "Neuer Urlaub-Chat").slice(0, 80);
+  }
+
+  function aiChatTimestampLabel(value) {
+    try {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "Datum unbekannt";
+      return new Intl.DateTimeFormat("de-DE", {day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(date);
+    } catch { return "Datum unbekannt"; }
+  }
+
+  function currentAIChatScope() {
+    const trip = activeTrip();
+    return {trip, scopeKey:trip && trip.id ? "trip:" + trip.id : "general"};
+  }
+
+  async function loadAISavedChats(shouldRender = true) {
+    if (!session || !session.user || !session.user.id) {
+      aiSavedChats = [];
+      aiHistoryMessage = "Melde dich an, damit deine gespeicherten Chats verfügbar sind.";
+      if (shouldRender) render();
+      return [];
+    }
+    const currentKey = aiChatStorageKey();
+    const scope = currentAIChatScope();
+    aiSavedChatsLoading = true;
+    aiHistoryMessage = "";
+    if (shouldRender) render();
+    try {
+      const result = await supabase.from("ai_saved_chats")
+        .select("id,user_id,scope_key,trip_id,title,messages,created_at,updated_at")
+        .eq("user_id", session.user.id)
+        .eq("scope_key", scope.scopeKey)
+        .order("updated_at", {ascending:false})
+        .limit(30);
+      if (result.error) throw result.error;
+      if (aiChatStorageKey() !== currentKey) return aiSavedChats;
+      aiSavedChats = (Array.isArray(result.data) ? result.data : []).map(chat => ({
+        id:String(chat.id),
+        title:String(chat.title || "Urlaub-Chat").slice(0,100),
+        scope_key:String(chat.scope_key || scope.scopeKey),
+        trip_id:chat.trip_id || null,
+        messages:restoreAIChatMessages(chat.messages),
+        created_at:chat.created_at,
+        updated_at:chat.updated_at
+      }));
+    } catch (e) {
+      aiHistoryMessage = "Gespeicherte Chats konnten nicht geladen werden. Prüfe deine Internetverbindung und versuche es erneut.";
+      console.warn("AI saved chat list failed", e && e.message || "");
+    } finally {
+      aiSavedChatsLoading = false;
+      if (shouldRender) render();
+    }
+    return aiSavedChats;
+  }
+
+  function aiSavedChatsPanelHTML() {
+    const list = aiSavedChats.map(chat => {
+      const lastUser = [...chat.messages].reverse().find(message => message.role === "user");
+      const summary = String(lastUser ? lastUser.content : "Noch keine Nachricht").replace(/\s+/g," ").slice(0,90);
+      return '<div class="group flex items-stretch gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm transition hover:border-blue-200">' +
+        '<button type="button" data-action="open-ai-saved-chat" data-chat-id="' + esc(chat.id) + '" class="flex min-w-0 flex-1 items-start gap-3 rounded-xl px-2 py-2 text-left hover:bg-blue-50/60">' +
+          '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">' + icon("messages-square","h-5 w-5") + '</span>' +
+          '<span class="min-w-0 flex-1"><span class="block truncate text-sm font-bold text-slate-800">' + esc(chat.title) + '</span>' +
+          '<span class="mt-1 block text-[11px] leading-4 text-slate-500">' + esc(summary) + '</span>' +
+          '<span class="mt-1.5 block text-[10px] text-slate-400">' + esc(aiChatTimestampLabel(chat.updated_at)) + ' · ' + chat.messages.length + ' Nachrichten</span></span>' +
+        '</button>' +
+        '<button type="button" data-action="delete-ai-saved-chat" data-chat-id="' + esc(chat.id) + '" aria-label="Gespeicherten Chat löschen" title="Chat löschen" class="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-rose-50 hover:text-rose-600">' + icon("trash-2","h-4 w-4") + '</button>' +
+      '</div>';
+    }).join("");
+    const trip = activeTrip();
+    return '<div class="space-y-4">' +
+      '<div class="flex items-start justify-between gap-3"><div><div class="flex items-center gap-2 text-base font-extrabold text-slate-900">' + icon("messages-square","h-5 w-5 text-blue-700") + ' Gespeicherte Chats</div>' +
+      '<div class="mt-1 text-xs leading-5 text-slate-500">' + (trip ? "Verlauf für " + esc(trip.name) : "Allgemeiner Reise-Chat") + ' · privat in deinem Konto</div></div>' +
+      '<button type="button" data-action="back-ai-chat" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100" aria-label="Zurück zum Chat">' + icon("arrow-left","h-4 w-4") + '</button></div>' +
+      '<div class="grid grid-cols-2 gap-2"><button type="button" data-action="new-ai-chat" class="flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-3 text-xs font-bold text-white transition hover:bg-blue-700">' + icon("plus","h-4 w-4") + ' Neuer Chat</button>' +
+      '<button type="button" data-action="save-ai-chat" class="flex items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100">' + icon("bookmark","h-4 w-4") + ' Diesen Chat speichern</button></div>' +
+      (aiHistoryMessage ? '<div class="rounded-xl ' + (aiHistoryMessage.toLowerCase().includes("gespeichert") ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800") + ' px-3 py-2 text-xs leading-5">' + esc(aiHistoryMessage) + '</div>' : "") +
+      (aiSavedChatsLoading ? '<div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">' + icon("loader-circle","h-5 w-5 animate-spin") + ' Lade gespeicherte Chats…</div>' :
+        aiSavedChats.length ? '<div class="space-y-2">' + list + '</div>' :
+        '<div class="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-8 text-center"><span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">' + icon("messages-square","h-6 w-6") + '</span><div class="mt-3 text-sm font-bold text-slate-800">Noch keine gespeicherten Chats</div><div class="mt-1 text-xs leading-5 text-slate-500">Speichere deinen aktuellen Verlauf. Beim Start eines neuen Chats wird ein bisher ungespeichertes Gespräch automatisch archiviert.</div></div>') +
+      '<div class="rounded-xl bg-slate-100 px-3 py-2.5 text-[10px] leading-4 text-slate-500">Chats werden deinem Konto zugeordnet. Offene Aktionen werden nicht automatisch ausgeführt oder wiederhergestellt.</div></div>';
+  }
+
+  async function saveCurrentAIChat(openLibrary = true) {
+    if (!session || !session.user || !session.user.id) {
+      aiHistoryMessage = "Bitte melde dich an, um Chats in deinem Konto zu speichern.";
+      if (openLibrary) { aiHistoryOpen = true; render(); }
+      return false;
+    }
+    if (!aiMessages.some(message => message.role === "user" && String(message.content || "").trim())) {
+      aiHistoryMessage = "Stelle zuerst eine Frage, bevor du diesen Chat speicherst.";
+      if (openLibrary) { aiHistoryOpen = true; render(); }
+      return false;
+    }
+    saveAIChatHistory();
+    await aiChatCloudSaveQueue.catch(() => {});
+    const key = aiChatStorageKey();
+    let snapshot = null;
+    try { snapshot = JSON.parse(localStorage.getItem(key) || "null"); } catch {}
+    const messages = Array.isArray(snapshot && snapshot.messages) ? snapshot.messages : [];
+    if (!messages.length) {
+      aiHistoryMessage = "Der aktuelle Verlauf konnte nicht vorbereitet werden. Bitte versuche es erneut.";
+      if (openLibrary) { aiHistoryOpen = true; render(); }
+      return false;
+    }
+    const scope = currentAIChatScope();
+    const savedAt = new Date().toISOString();
+    const title = aiSavedChatTitleFromMessages(messages);
+    try {
+      let result;
+      if (aiCurrentSavedChatId) {
+        result = await supabase.from("ai_saved_chats")
+          .update({title,messages,updated_at:savedAt})
+          .eq("id",aiCurrentSavedChatId).eq("user_id",session.user.id)
+          .select("id,user_id,scope_key,trip_id,title,messages,created_at,updated_at").single();
+      } else {
+        result = await supabase.from("ai_saved_chats")
+          .insert({user_id:session.user.id,scope_key:scope.scopeKey,trip_id:scope.trip ? scope.trip.id : null,title,messages,updated_at:savedAt})
+          .select("id,user_id,scope_key,trip_id,title,messages,created_at,updated_at").single();
+      }
+      if (result.error) throw result.error;
+      aiCurrentSavedChatId = result.data.id;
+      aiCurrentSavedChatTitle = result.data.title;
+      aiHistoryMessage = "Chat gespeichert.";
+      const chat = Object.assign({},result.data,{messages:restoreAIChatMessages(result.data.messages)});
+      aiSavedChats = [chat,...aiSavedChats.filter(item=>item.id!==chat.id)].sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at)));
+      if (openLibrary) {
+        aiHistoryOpen = true;
+        await loadAISavedChats(false);
+      }
+      render();
+      return true;
+    } catch (e) {
+      console.warn("AI saved chat write failed",e && e.message || "");
+      aiHistoryMessage = "Der Chat konnte nicht im Konto gespeichert werden. Der lokale Verlauf bleibt vorerst auf diesem Gerät.";
+      if (openLibrary) { aiHistoryOpen = true; render(); }
+      return false;
+    }
+  }
+
+  async function openAISavedChat(chatId) {
+    const chat = aiSavedChats.find(item=>item.id===chatId);
+    if (!chat) return;
+    aiCurrentSavedChatId = chat.id;
+    aiCurrentSavedChatTitle = chat.title;
+    aiMessages = restoreAIChatMessages(chat.messages);
+    if (!aiMessages.length) aiMessages = [defaultAIChatMessage()];
+    aiHistoryOpen = false;
+    aiHistoryMessage = "";
+    aiError = "";
+    aiInput = "";
+    aiChatLoadedStorageKey = aiChatStorageKey();
+    saveAIChatHistory();
+    render();
+    setTimeout(()=>{const box=document.getElementById("ai-chat-messages");if(box)box.scrollTop=box.scrollHeight;},0);
+  }
+
+  async function startNewAIChat() {
+    const hasUserMessages = aiMessages.some(message=>message.role==="user" && String(message.content||"").trim());
+    if (hasUserMessages && !aiCurrentSavedChatId) {
+      const saved = await saveCurrentAIChat(false);
+      if (!saved) return;
+    } else if (aiCurrentSavedChatId) {
+      saveAIChatHistory();
+      await aiSavedChatCloudSaveQueue.catch(()=>{});
+    }
+    aiCurrentSavedChatId = null;
+    aiCurrentSavedChatTitle = "";
+    aiMessages = [defaultAIChatMessage()];
+    aiInput = "";
+    aiError = "";
+    aiHistoryMessage = "";
+    aiHistoryOpen = false;
+    saveAIChatHistory();
+    render();
+  }
+
+  async function deleteAISavedChat(chatId) {
+    if (!session || !session.user || !session.user.id || !chatId) return;
+    if (!window.confirm("Diesen gespeicherten Chat endgültig löschen?")) return;
+    try {
+      const result = await supabase.from("ai_saved_chats").delete().eq("id",chatId).eq("user_id",session.user.id);
+      if (result.error) throw result.error;
+      aiSavedChats = aiSavedChats.filter(item=>item.id!==chatId);
+      if (aiCurrentSavedChatId===chatId) { aiCurrentSavedChatId=null; aiCurrentSavedChatTitle=""; }
+      aiHistoryMessage = "Chat gelöscht.";
+    } catch (e) {
+      aiHistoryMessage = "Der Chat konnte nicht gelöscht werden.";
+      console.warn("AI saved chat delete failed",e && e.message || "");
+    }
+    render();
+  }
+
   function totals() {
     const trip = activeTrip();
     if (!trip) return { total:0, remaining:0 };
