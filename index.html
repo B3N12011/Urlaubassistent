@@ -2157,6 +2157,18 @@
           const {error:cloudError} = await supabase.from("ai_chat_history").upsert(row,{onConflict:"user_id,scope_key"});
           if (cloudError) console.warn("AI cloud history save failed; local history is kept",cloudError.message || "");
         });
+        if (aiCurrentSavedChatId) {
+          const selectedChatId = aiCurrentSavedChatId;
+          const selectedUserId = session.user.id;
+          const selectedTitle = aiSavedChatTitleFromMessages(messages);
+          aiCurrentSavedChatTitle = selectedTitle;
+          aiSavedChatCloudSaveQueue = aiSavedChatCloudSaveQueue.catch(()=>{}).then(async()=>{
+            const {error:savedError} = await supabase.from("ai_saved_chats")
+              .update({title:selectedTitle,messages,updated_at:savedAt})
+              .eq("id",selectedChatId).eq("user_id",selectedUserId);
+            if (savedError) console.warn("AI saved chat auto-save failed",savedError.message || "");
+          });
+        }
       }
     } catch(e) {
       console.warn("AI chat history could not be stored locally",e?.message || "");
@@ -2167,6 +2179,12 @@
     const key = aiChatStorageKey();
     if (!key || !session?.user?.id) return;
     if (!force && key === aiChatLoadedStorageKey) return;
+    if (key !== aiChatLoadedStorageKey) {
+      aiCurrentSavedChatId = null;
+      aiCurrentSavedChatTitle = "";
+      aiHistoryOpen = false;
+      aiSavedChats = [];
+    }
     aiChatLoadedStorageKey = key;
     const trip = activeTrip();
     const scopeKey = trip?.id ? "trip:" + trip.id : "general";
