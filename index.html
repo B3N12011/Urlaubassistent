@@ -1757,6 +1757,228 @@
     }
   }
 
+  function newAIChatId() {
+    try { return crypto.randomUUID(); }
+    catch {
+      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, character => {
+        const random = Math.random() * 16 | 0;
+        return (character === "x" ? random : (random & 3 | 8)).toString(16);
+      });
+    }
+  }
+
+  function aiWelcomeMessages() {
+    return [{role:"assistant",content:"Hallo! Ich bin dein persönlicher Urlaubsmanager. Du kannst mich nach deinem Budget fragen, Ausgaben einsprechen, einen Kassenbon fotografieren oder Packliste und To-dos verwalten. Ich zeige Änderungen zuerst zum Prüfen an."}];
+  }
+
+  function aiChatLocalKey(userId) {
+    return K.aiChatHistoryPrefix + String(userId || "guest");
+  }
+
+  function readLocalAIChats(userId) {
+    try {
+      const value=JSON.parse(localStorage.getItem(aiChatLocalKey(userId))||"[]");
+      return Array.isArray(value) ? value.filter(chat=>chat&&typeof chat.id==="string"&&Array.isArray(chat.messages)) : [];
+    } catch { return []; }
+  }
+
+  function writeLocalAIChats(userId, chats) {
+    try {
+      localStorage.setItem(aiChatLocalKey(userId),JSON.stringify((Array.isArray(chats)?chats:[]).slice(0,30)));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function safeStoredAIMessage(message) {
+    if(!message || (message.role!=="user" && message.role!=="assistant") || typeof message.content!=="string")return null;
+    const clean={role:message.role,content:message.content.slice(0,6000)};
+    if(Array.isArray(message.sources))clean.sources=message.sources.slice(0,3).map(source=>({
+      url:String(source.url||"").slice(0,1000),
+      title:String(source.title||"").slice(0,150),
+      snippet:String(source.snippet||"").slice(0,220),
+      domain:String(source.domain||"").slice(0,120)
+    }));
+    if(message.webSearchRequested===true)clean.webSearchRequested=true;
+    if(message.webSearchEligible===true)clean.webSearchEligible=true;
+    if(typeof message.webSearchBlockedReason==="string")clean.webSearchBlockedReason=message.webSearchBlockedReason.slice(0,32);
+    if(Array.isArray(message.followUps))clean.followUps=message.followUps.filter(item=>typeof item==="string").slice(0,3).map(item=>item.slice(0,100));
+    if(message.actionsApplied===true)clean.actionsApplied=true;
+    // Pending action payloads are deliberately not restored after reload.
+    return clean;
+  }
+
+  function aiChatTitle(messages) {
+    const first=(Array.isArray(messages)?messages:[]).find(message=>message&&message.role==="user"&&typeof message.content==="string");
+    if(!first)return "Neuer Chat";
+    const title=first.content.replace(/\s+/g," ").trim();
+    return title.length>58 ? title.slice(0,57)+"…" : (title || "Neuer Chat");
+  }
+
+  function mergeAIChatRecord(record) {
+    const userId=session?.user?.id||"guest";
+    const all=readLocalAIChats(userId);
+    const existing=all.find(chat=>chat.id===record.id);
+    const merged={...existing,...record,created_at:record.created_at||existing?.created_at||new Date().toISOString()};
+    const next=[merged,...all.filter(chat=>chat.id!==merged.id)]
+      .sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")))
+      .slice(0,30);
+    writeLocalAIChats(userId,next);
+    aiChatHistory=[merged,...aiChatHistory.filter(chat=>chat.id!==merged.id)]
+      .sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")))
+      .slice(0,30);
+    return merged;
+  }
+
+  function persistAIChat() {
+    const userId=String(session?.user?.id||"");
+    if(!aiMessages.some(message=>message.role==="user"))return Promise.resolve(false);
+    if(!aiActiveChatId)aiActiveChatId=newAIChatId();
+    if(aiActiveTripId===null && activeTrip())aiActiveTripId=activeTrip().id;
+    const now=new Date().toISOString();
+    const existing=readLocalAIChats(userId||"guest").find(chat=>chat.id===aiActiveChatId)||aiChatHistory.find(chat=>chat.id===aiActiveChatId);
+    const messages=aiMessages.slice(-80).map(safeStoredAIMessage).filter(Boolean);
+    const record={
+      id:aiActiveChatId,
+      user_id:userId||null,
+      trip_id:aiActiveTripId||null,
+      title:aiChatTitle(messages),
+      messages,
+      created_at:existing?.created_at||now,
+      updated_at:now
+    };
+    mergeAIChatRecord(record);
+    if(!userId)return Promise.resolve(true);
+    const row={...record,user_id:userId};
+    aiChatSaveQueue=aiChatSaveQueue.catch(()=>{}).then(async()=>{
+      const {error:saveError}=await supabase.from("ai_chat_conversations").upsert(row,{onConflict:"id"});
+      if(saveError) {
+        console.warn("AI chat history sync failed; local chat is still saved.",saveError.message);
+        return false;
+      }
+      return true;
+    });
+    return aiChatSaveQueue.catch(()=>false);
+  }
+
+  function restoreAIChatMessages(messages) {
+    const restored=(Array.isArray(messages)?messages:[]).map(safeStoredAIMessage).filter(Boolean).slice(-80);
+    return restored.length ? restored : aiWelcomeMessages();
+  }
+
+  function aiChatHistoryHTML() {
+    const wantedTrip=String(aiActiveTripId||"");
+    const records=aiChatHistory.filter(chat=>String(chat.trip_id||"")===wantedTrip).slice(0,20);
+    const items=records.map(chat=>{
+      const selected=chat.id===aiActiveChatId;
+      const day=String(chat.updated_at||"").slice(0,10);
+      const preview=(chat.messages||[]).slice().reverse().find(message=>message.role==="assistant"&&message.content)?.content||"";
+      return '<button type="button" data-action="load-ai-chat" data-chat-id="'+esc(chat.id)+'" class="flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition '+(selected?"border-blue-200 bg-blue-50":"border-slate-100 bg-white hover:border-blue-100 hover:bg-slate-50")+'"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl '+(selected?"bg-blue-600 text-white":"bg-slate-100 text-slate-600")+'">'+icon("messages-square","h-4 w-4")+'</span><span class="min-w-0 flex-1"><span class="block truncate text-xs font-bold text-slate-800">'+esc(chat.title||"Gespeicherter Chat")+'</span><span class="mt-1 block truncate text-[10px] leading-4 text-slate-500">'+esc(preview.replace(/\s+/g," ").slice(0,100))+'</span><span class="mt-1 block text-[9px] text-slate-400">'+(day?esc(shortDate(day)): "Gespeichert")+'</span></span>'+icon("chevron-right","mt-1 h-4 w-4 shrink-0 text-slate-400")+'</button>';
+    }).join("");
+    return '<section class="mb-3 rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm"><div class="mb-3 flex items-center justify-between gap-3"><div><div class="text-sm font-bold text-slate-900">Deine gespeicherten Chats</div><div class="mt-0.5 text-[10px] leading-4 text-slate-500">Privat in deinem Konto, getrennt nach Urlaub</div></div><button type="button" data-action="new-ai-chat" class="flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-[10px] font-bold text-white">'+icon("square-pen","h-3.5 w-3.5")+'Neuer Chat</button></div>' +
+      (aiHistoryLoading?'<div class="flex items-center gap-2 py-3 text-xs text-slate-500">'+icon("loader-circle","h-4 w-4 animate-spin")+'Lade Chatverlauf…</div>':items?'<div class="space-y-2">'+items+'</div>':'<div class="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-5 text-center"><div class="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500">'+icon("messages-square","h-4 w-4")+'</div><div class="mt-2 text-xs font-semibold text-slate-700">Noch keine gespeicherten Chats</div><div class="mt-1 text-[10px] leading-4 text-slate-500">Dein Gespräch wird nach deiner ersten Nachricht automatisch gespeichert.</div></div>')+
+      '<div class="mt-3 flex items-center gap-1.5 text-[9px] leading-4 text-slate-400">'+icon("shield-check","h-3 w-3")+'Andere Benutzer können deine Chats nicht sehen.</div></section>';
+  }
+
+  async function loadAIChatHistory() {
+    const userId=String(session?.user?.id||"guest");
+    if(!aiActiveChatId) {
+      aiActiveChatId=newAIChatId();
+      aiActiveTripId=activeTrip()?.id||null;
+    }
+    const tripId=aiActiveTripId||null;
+    const tripKey=String(tripId||"");
+    if(aiHistoryLoadedForUser===userId && aiHistoryLoadedTripKey===tripKey)return;
+    aiHistoryLoading=true;
+    const allLocal=readLocalAIChats(userId);
+    const local=allLocal.filter(chat=>String(chat.trip_id||"")===tripKey);
+    aiChatHistory=local.slice().sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")));
+    render();
+    let remoteRows=[];
+    if(session?.user?.id) {
+      try {
+        let query=supabase.from("ai_chat_conversations").select("id,user_id,trip_id,title,messages,created_at,updated_at").eq("user_id",userId);
+        query=tripId ? query.eq("trip_id",tripId) : query.is("trip_id",null);
+        const {data,error:loadError}=await query.order("updated_at",{ascending:false}).limit(30);
+        if(loadError)console.warn("Could not load remote AI chat history; using local cache.",loadError.message);
+        else remoteRows=Array.isArray(data)?data:[];
+      } catch(error) {
+        console.warn("Could not load remote AI chat history; using local cache.",error?.message||"");
+      }
+    }
+    const byId=new Map();
+    for(const chat of local)byId.set(chat.id,chat);
+    for(const row of remoteRows) {
+      if(!row||!row.id||!Array.isArray(row.messages))continue;
+      const localRow=byId.get(row.id);
+      const localTime=new Date(localRow?.updated_at||0).getTime();
+      const remoteTime=new Date(row.updated_at||0).getTime();
+      byId.set(row.id,remoteTime>=localTime?row:localRow);
+    }
+    aiChatHistory=Array.from(byId.values())
+      .sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")))
+      .slice(0,30);
+    writeLocalAIChats(userId,[
+      ...aiChatHistory,
+      ...allLocal.filter(chat=>String(chat.trip_id||"")!==tripKey)
+    ].sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||""))).slice(0,30));
+    if(session?.user?.id) {
+      const remoteIds=new Set(remoteRows.map(row=>row.id));
+      for(const chat of local) {
+        if(remoteIds.has(chat.id))continue;
+        const row={...chat,user_id:userId};
+        delete row._localOnly;
+        try {
+          const {error:syncError}=await supabase.from("ai_chat_conversations").upsert(row,{onConflict:"id"});
+          if(syncError)console.warn("Could not sync local AI chat yet.",syncError.message);
+        } catch {}
+      }
+    }
+    aiHistoryLoadedForUser=userId;
+    aiHistoryLoadedTripKey=tripKey;
+    aiHistoryLoading=false;
+    if(!aiChatFreshStart && !aiMessages.some(message=>message.role==="user") && aiChatHistory.length) {
+      const recent=aiChatHistory[0];
+      aiActiveChatId=recent.id;
+      aiActiveTripId=recent.trip_id||null;
+      aiMessages=restoreAIChatMessages(recent.messages);
+    }
+    render();
+  }
+
+  async function startNewAIChat() {
+    await persistAIChat();
+    aiActiveChatId=newAIChatId();
+    aiActiveTripId=activeTrip()?.id||null;
+    aiMessages=aiWelcomeMessages();
+    aiInput="";
+    aiError="";
+    aiReceiptImageDataUrl="";
+    aiReceiptImageName="";
+    aiReceiptProcessing=false;
+    aiHistoryOpen=false;
+    aiChatFreshStart=true;
+    aiHistoryLoadedForUser="";
+    aiHistoryLoadedTripKey="";
+    render();
+  }
+
+  async function openSavedAIChat(chatId) {
+    const chat=aiChatHistory.find(item=>item.id===chatId);
+    if(!chat)return;
+    aiActiveChatId=chat.id;
+    aiActiveTripId=chat.trip_id||null;
+    aiMessages=restoreAIChatMessages(chat.messages);
+    aiInput="";
+    aiError="";
+    aiReceiptImageDataUrl="";
+    aiReceiptImageName="";
+    aiHistoryOpen=false;
+    aiChatFreshStart=false;
+    render();
+  }
+
   function normalizeAIActionProposal(value) {
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     const text = (v, max) => typeof v === "string" ? v.trim().slice(0, max || 160) : "";
