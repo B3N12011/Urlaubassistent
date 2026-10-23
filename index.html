@@ -144,7 +144,9 @@
       border-radius: 18px; background: linear-gradient(145deg, #ffffff, #f8fbff);
       box-shadow: 0 5px 18px rgba(15,23,42,.035), inset 0 1px 0 #fff;
     }
-    .ai-recommendation-card h3 { margin-top: 0 !important; padding-bottom: 8px; border-bottom: 1px solid #eaf0f7; }
+    .ai-recommendation-card h3 { display: flex; align-items: center; gap: .55rem; margin-top: 0 !important; padding-bottom: 8px; border-bottom: 1px solid #eaf0f7; }
+    .ai-recommendation-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: 0 0 auto; border-radius: 9px; background: #eff6ff; color: #2563eb; }
+    .ai-recommendation-card h3 strong { flex: 1; }
     .ai-recommendation-card > :last-child { margin-bottom: 0; }
     .ai-web-search-note { margin-top: 10px; padding: 9px 11px; border-radius: 12px; background: #f1f5f9; color: #64748b; font-size: 10px; line-height: 1.5; }
     .ai-web-search-note.is-limited { background: #fff7ed; color: #9a3412; }
@@ -1457,7 +1459,9 @@
         const level = heading[1].length <= 3 ? 3 : 4;
         if (level === 3) {
           if (recommendationCardOpen) out.push("</section>");
-          out.push('<section class="ai-recommendation-card"><h3>' + aiMarkdownInline(heading[2]) + "</h3>");
+          const headingText = heading[2].toLowerCase();
+          const cardIcon = /(budget|ausgab|kosten|spar|geld|euro)/i.test(headingText) ? "wallet-cards" : /(pack|to-do|aufgabe|checkliste|erledigt)/i.test(headingText) ? "list-checks" : "map-pinned";
+          out.push('<section class="ai-recommendation-card"><h3><span class="ai-recommendation-icon">' + icon(cardIcon, "h-4 w-4") + '</span>' + aiMarkdownInline(heading[2]) + "</h3>");
           recommendationCardOpen = true;
         } else {
           out.push("<h4>" + aiMarkdownInline(heading[2]) + "</h4>");
