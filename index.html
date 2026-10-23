@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
-  <link rel="icon" type="image/png" href="icon-192.png?v=3" />
+  <link rel="icon" type="image/png" href="/icon-192.png?v=13" />
   <link rel="apple-touch-icon" href="icon-192.png?v=3" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="manifest.json?v=5" />
+  <link rel="manifest" href="/manifest.json?v=13" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -694,6 +694,35 @@
     </button>`;
   }
 
+  function isPWAStandalone() {
+    return Boolean(window.matchMedia?.("(display-mode: standalone)")?.matches || navigator.standalone === true);
+  }
+
+  async function installPWA() {
+    pwaInstallHelpMessage = "";
+    if (isPWAStandalone()) { pwaInstallHelpMessage = "Urlaubassistent ist bereits installiert."; render(); return; }
+    if (pwaInstallPromptEvent) {
+      const promptEvent=pwaInstallPromptEvent;
+      pwaInstallPromptEvent=null;
+      try {
+        await promptEvent.prompt();
+        const choice=await promptEvent.userChoice;
+        pwaInstallHelpMessage=choice?.outcome==="accepted" ? "Die Installation wurde bestätigt. Folge ggf. dem Hinweis deines Browsers." : "Die Installation wurde noch nicht abgeschlossen. Du kannst es später erneut versuchen.";
+      } catch {
+        pwaInstallHelpMessage="Der Browser konnte den Installationsdialog nicht öffnen. Nutze stattdessen das Browser-Menü.";
+      }
+      render();return;
+    }
+    const ua=navigator.userAgent||"";
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+      pwaInstallHelpMessage="Auf iPhone oder iPad: Öffne diese Seite in Safari, tippe auf Teilen und wähle Zum Home-Bildschirm.";
+    } else if (/Android/i.test(ua)) {
+      pwaInstallHelpMessage="Öffne das Chrome-Menü ⋮ und wähle App installieren oder Zum Startbildschirm hinzufügen. Falls die Option fehlt, öffne https://urlaub-assistent.netlify.app/ direkt in Chrome und lade die Seite neu.";
+    } else {
+      pwaInstallHelpMessage="Öffne das Menü deines Browsers und suche nach App installieren oder Diese Website als App installieren. Die Seite muss über HTTPS erreichbar sein.";
+    }
+    render();
+  }
   function topBarHTML(title, subtitle) {
     const trip = activeTrip();
     return `<div class="mb-6 rounded-[2rem] bg-slate-900 p-4 text-white shadow-xl md:p-5">
@@ -705,11 +734,12 @@
           <h1 class="truncate text-2xl font-bold tracking-tight md:text-3xl">${esc(title)}</h1>
           <p class="mt-1 text-sm text-white/65">${esc(subtitle)}</p>
         </div>
-        <div class="hidden shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-white/70 sm:block">
-          <div>Ausgaben</div>
-          <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
+        <div class="flex shrink-0 flex-col items-end gap-2">
+          ${isPWAStandalone() ? `<div class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-400/15 px-2.5 py-2 text-[10px] font-bold text-emerald-200">${icon("check-circle-2","h-3.5 w-3.5")} Installiert</div>` : `<button type="button" data-action="install-app" class="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/10 px-2.5 py-2 text-[10px] font-bold text-white shadow-sm transition hover:bg-white/15">${icon("download","h-3.5 w-3.5")} App installieren</button>`}
+          <div class="hidden rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-white/70 sm:block"><div>Ausgaben</div><div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div></div>
         </div>
       </div>
+      ${pwaInstallHelpMessage ? `<div class="mt-3 rounded-xl border border-white/10 bg-white/10 p-3 text-xs leading-5 text-white/85">${esc(pwaInstallHelpMessage)} <button type="button" data-action="dismiss-install-help" class="font-bold text-white underline underline-offset-2">Schließen</button></div>` : ""}
       ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
     </div>`;
   }
@@ -3233,9 +3263,20 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
   window.addEventListener("offline",()=>{offline=true;render();});
 
 
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    pwaInstallPromptEvent = event;
+    render();
+  });
+  window.addEventListener("appinstalled", () => {
+    pwaInstallPromptEvent = null;
+    pwaInstallHelpMessage = "Urlaubassistent wurde erfolgreich installiert.";
+    render();
+  });
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=12").catch(() => {});
+      navigator.serviceWorker.register("/service-worker.js?v=13").catch(() => {});
     }, { once: true });
   }
 
