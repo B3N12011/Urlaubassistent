@@ -761,7 +761,7 @@
       ${trip ? `<section class="rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl md:p-7">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
-            <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div>
+            <div class="mb-3 flex items-center justify-between gap-3"><div class="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div>${pwaInstallButtonHTML()}</div>
             <h1 class="text-3xl font-bold tracking-tight md:text-5xl">${esc(trip.name)}</h1>
             <p class="mt-2 text-sm text-white/70 md:text-base">${esc(trip.destination || "Kein Ziel")} · ${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}</p>
           </div>
