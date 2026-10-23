@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
-  <link rel="icon" type="image/png" href="/icon-192.png?v=13" />
-  <link rel="apple-touch-icon" href="/icon-192.png?v=13" />
+  <link rel="icon" type="image/png" href="/icon-192.png?v=14" />
+  <link rel="apple-touch-icon" href="/icon-192.png?v=14" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="/manifest.json?v=13" />
+  <link rel="manifest" href="/manifest.json?v=14" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -721,7 +721,7 @@
           <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
         </div>
       </div>
-      ${deferredPWAInstallPrompt && !pwaInstalled ? `<button type="button" data-action="install-pwa" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">${icon("download","h-4 w-4")} App installieren</button>` : ""}
+      ${!pwaInstalled ? `<button type="button" data-action="install-pwa" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">${icon("download","h-4 w-4")} App installieren</button>` : ""}
       ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
     </div>`;
   }
@@ -1946,6 +1946,15 @@
     message.actions=null;message.actionsDismissed=true;saveAIChatHistory();render();
   }
 
+  function pwaInstallHelpHTML() {
+    return '<div class="fixed inset-0 z-[170] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="pwa-install-title">' +
+      '<div class="w-full max-w-sm rounded-[1.75rem] bg-white p-5 shadow-2xl ring-1 ring-black/10">' +
+      '<div class="flex items-start gap-3"><span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">' + icon("smartphone","h-5 w-5") + '</span><div class="min-w-0 flex-1"><h2 id="pwa-install-title" class="text-lg font-extrabold tracking-tight text-slate-900">Urlaubassistent installieren</h2><p class="mt-1 text-xs leading-5 text-slate-500">Dein Browser bietet gerade keinen direkten Installationsdialog an. Versuche es über das Browsermenü.</p></div><button type="button" data-action="close-pwa-install-help" class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600" aria-label="Schließen">' + icon("x","h-4 w-4") + '</button></div>' +
+      '<div class="mt-4 rounded-2xl bg-slate-50 p-4"><div class="text-xs font-extrabold text-slate-800">Android · Chrome</div><ol class="mt-2 list-decimal space-y-2 pl-4 text-xs leading-5 text-slate-600"><li>Öffne urlaub-assistent.netlify.app direkt in Chrome, nicht in einem eingebauten Browser einer anderen App.</li><li>Tippe oben rechts auf <strong>⋮</strong>.</li><li>Wähle <strong>App installieren</strong> oder <strong>Zum Startbildschirm hinzufügen</strong>.</li><li>Wenn Chrome weiterhin ablehnt, aktualisiere die Seite und versuche es erneut.</li></ol></div>' +
+      '<div class="mt-3 rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-[11px] leading-5 text-blue-900">Das Manifest und die Icons liegen im Projekt-Root. Wenn Chrome weiterhin ablehnt, müssen die tatsächlich ausgelieferten Manifest-, Icon- und Service-Worker-Antworten direkt im Browser geprüft werden.</div>' +
+      '<button type="button" data-action="close-pwa-install-help" class="mt-4 w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Verstanden</button>' +
+      '</div></div>';
+  }
   function appHTML() {
     const [title, subtitle] = pageTitle();
     let pageContent = "";
@@ -1978,6 +1987,7 @@
       ${joinDialogOpen ? joinDialogHTML() : ""}
       ${deleteDialog ? deleteConfirmHTML() : ""}
       ${customCategoryDialog ? customExpenseCategoryDialogHTML() : ""}
+      ${pwaInstallHelpOpen ? pwaInstallHelpHTML() : ""}
     </div>`;
   }
 
@@ -3079,7 +3089,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         return;
       }
       if(action==="install-pwa"){
-        if(!deferredPWAInstallPrompt){error="Der Browser bietet gerade keine Installation an. Öffne die App in Chrome und prüfe das Browsermenü.";render();return;}
+        if(!deferredPWAInstallPrompt){pwaInstallHelpOpen=true;render();return;}
         const promptEvent=deferredPWAInstallPrompt;
         await promptEvent.prompt();
         const choice=await promptEvent.userChoice.catch(()=>({outcome:"dismissed"}));
@@ -3088,6 +3098,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         render();
         return;
       }
+      if(action==="close-pwa-install-help"){pwaInstallHelpOpen=false;render();return;}
       if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";if(aiOpen)loadAIChatHistory();render();return;}
       if(action==="toggle-ai-history"){aiChatHistoryOpen=!aiChatHistoryOpen;aiError="";if(aiChatHistoryOpen)await loadAISavedChats();render();return;}
       if(action==="new-ai-chat"){await startNewAIChat();return;}
@@ -3346,13 +3357,18 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
   });
   window.addEventListener("appinstalled", () => {
     pwaInstalled = true;
+    pwaInstallHelpOpen = false;
     deferredPWAInstallPrompt = null;
     render();
   });
 
+  window.addEventListener("pagehide", () => {
+    if (session?.user?.id) saveAIChatHistory();
+  });
+
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=13").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=14").catch(() => {});
     }, { once: true });
   }
 
