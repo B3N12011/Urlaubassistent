@@ -234,6 +234,16 @@
   let aiWebSearchEnabled = false;
   let aiChatLoadedStorageKey = "";
   let aiChatCloudSaveQueue = Promise.resolve();
+  let aiSavedChatCloudSaveQueue = Promise.resolve();
+  let aiHistoryOpen = false;
+  let aiSavedChats = [];
+  let aiSavedChatsLoading = false;
+  let aiHistoryMessage = "";
+  let aiCurrentSavedChatId = null;
+  let aiCurrentSavedChatTitle = "";
+  let deferredPwaInstallPrompt = null;
+  let pwaIsInstalled = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  let pwaInstallMessage = "";
   let aiReceiptImageDataUrl = "";
   let aiReceiptImageName = "";
   let aiReceiptProcessing = false;
