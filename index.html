@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
   <link rel="icon" type="image/png" href="/icon-192.png?v=13" />
-  <link rel="apple-touch-icon" href="icon-192.png?v=3" />
+  <link rel="apple-touch-icon" href="/icon-192.png?v=13" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -246,6 +246,8 @@
   let aiSpeechRecognition = null;
   let aiListening = false;
   let aiActionsApplying = false;
+  let deferredPWAInstallPrompt = null;
+  let pwaInstalled = false;
   let aiThinkingTimer = null;
   let aiThinkingStatus = "Ich schaue mir deinen Urlaub an";
   let aiMessages = [
@@ -708,6 +710,7 @@
           <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
         </div>
       </div>
+      ${deferredPWAInstallPrompt && !pwaInstalled ? `<button type="button" data-action="install-pwa" class="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-white/15">${icon("download","h-4 w-4")} App installieren</button>` : ""}
       ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
     </div>`;
   }
@@ -2182,7 +2185,7 @@
         const activeKey = aiConversationStorageKey();
         if (activeKey) localStorage.setItem(activeKey, aiCurrentConversationId);
       }
-      const snapshot = {version:1,savedAt,conversationId:aiCurrentConversationId,messages};
+      const snapshot = {version:1,savedAt,conversationId:aiCurrentConversationId,newChat:!hasUserMessages&&!aiCurrentConversationId,messages};
       localStorage.setItem(key,JSON.stringify(snapshot));
       aiChatLoadedStorageKey = key;
 
@@ -2371,7 +2374,7 @@
     await loadAISavedChats();
     if(aiChatStorageKey()!==key)return;
     let currentChat=aiSavedChats.find(chat=>String(chat.id)===String(aiCurrentConversationId||""));
-    if(!currentChat&&aiSavedChats.length) {
+    if(!currentChat&&aiSavedChats.length&&localSnapshot?.newChat!==true) {
       const newest=aiSavedChats[0];
       const localTime=Date.parse(String(localSnapshot?.savedAt||""));
       const newestTime=Date.parse(String(newest.updated_at||""));
@@ -3000,6 +3003,16 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         }
         return;
       }
+      if(action==="install-pwa"){
+        if(!deferredPWAInstallPrompt){error="Der Browser bietet gerade keine Installation an. Öffne die App in Chrome und prüfe das Browsermenü.";render();return;}
+        const promptEvent=deferredPWAInstallPrompt;
+        await promptEvent.prompt();
+        const choice=await promptEvent.userChoice.catch(()=>({outcome:"dismissed"}));
+        deferredPWAInstallPrompt=null;
+        if(choice?.outcome==="accepted")pwaInstalled=true;
+        render();
+        return;
+      }
       if(action==="toggle-ai"){aiOpen=!aiOpen;aiError="";if(aiOpen)loadAIChatHistory();render();return;}
       if(action==="toggle-ai-history"){aiChatHistoryOpen=!aiChatHistoryOpen;aiError="";if(aiChatHistoryOpen)await loadAISavedChats();render();return;}
       if(action==="new-ai-chat"){await startNewAIChat();return;}
@@ -3069,7 +3082,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
-      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();return;}
+      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
       if(action==="close-share"){shareDialogOpen=false;shareTripId=null;shareCode="";render();return;}
@@ -3250,6 +3263,17 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
   window.addEventListener("online",()=>{offline=false;render();if(session)loadTrips();});
   window.addEventListener("offline",()=>{offline=true;render();});
 
+
+  window.addEventListener("beforeinstallprompt", event => {
+    event.preventDefault();
+    deferredPWAInstallPrompt = event;
+    render();
+  });
+  window.addEventListener("appinstalled", () => {
+    pwaInstalled = true;
+    deferredPWAInstallPrompt = null;
+    render();
+  });
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
