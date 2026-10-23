@@ -1458,7 +1458,20 @@
     };
     const flushBlocks = () => { flushParagraph(); flushList(); flushQuote(); };
 
-    for (const rawLine of lines) {
+    const splitTableCells = value => {
+      let clean = String(value || "").trim();
+      if (clean.startsWith("|")) clean = clean.slice(1);
+      if (clean.endsWith("|")) clean = clean.slice(0, -1);
+      return clean.split("|").map(cell => cell.trim());
+    };
+    const isTableRow = value => String(value || "").includes("|") && splitTableCells(value).length >= 2;
+    const isTableDivider = value => {
+      const cells = splitTableCells(value);
+      return cells.length >= 2 && cells.every(cell => /^:?-{3,}:?$/.test(cell));
+    };
+
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      const rawLine = lines[lineIndex];
       const line = rawLine.trim();
       if (!line) { flushBlocks(); continue; }
 
@@ -1479,6 +1492,23 @@
       }
       if (/^(---+|___+)\s*$/.test(line)) {
         flushBlocks(); out.push("<hr>"); continue;
+      }
+
+      if (isTableRow(line) && lineIndex + 1 < lines.length && isTableDivider(lines[lineIndex + 1].trim())) {
+        flushBlocks();
+        const headers = splitTableCells(line);
+        lineIndex += 1;
+        const rows = [];
+        for (lineIndex += 1; lineIndex < lines.length; lineIndex++) {
+          const row = lines[lineIndex].trim();
+          if (!row || !isTableRow(row)) { lineIndex -= 1; break; }
+          const cells = splitTableCells(row);
+          rows.push(headers.map((_, index) => cells[index] || ""));
+        }
+        const headHtml = headers.map(cell => "<th>" + aiMarkdownInline(cell) + "</th>").join("");
+        const rowsHtml = rows.map(row => "<tr>" + row.map(cell => "<td>" + aiMarkdownInline(cell) + "</td>").join("") + "</tr>").join("");
+        out.push('<div class="ai-table-wrap"><table><thead><tr>' + headHtml + "</tr></thead><tbody>" + rowsHtml + "</tbody></table></div>");
+        continue;
       }
 
       const quoteLine = line.match(/^>\s?(.*)$/);
