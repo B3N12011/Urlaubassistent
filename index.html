@@ -307,6 +307,16 @@
   let joinCode = "";
   let joinLoading = false;
   let joinMessage = "";
+  let family = null;
+  let familyMembers = [];
+  let familyLoading = false;
+  let familySaving = false;
+  let familyInviteLoading = false;
+  let familyNameInput = "";
+  let familyJoinCodeInput = "";
+  let familyInviteCode = "";
+  let familyMessage = "";
+  let familyError = "";
   let showDeleteAccount = false;
   let realtimeChannel = null;
 
@@ -843,6 +853,7 @@
         <div class="mt-5 space-y-2">${tripsVisible.length ? tripsVisible.map(trip => tripCardHTML(trip)).join("") : emptyHTML("Noch keine Urlaube angelegt.")}</div>
         ${trips.length > LIST_LIMIT ? moreButtonHTML("trips", tripsExpanded) : ""}
       `)}
+      ${familyCardHTML()}
       ${activeTrip() ? cardHTML("Teilnehmer", "Dieser Bereich zeigt dir die Personen des aktuell ausgewählten Urlaubs", "users", `
         <div class="flex flex-wrap gap-2">${people.length ? people.slice(0,LIST_LIMIT).map(p => `<span class="rounded-full bg-slate-100 px-3 py-2 text-sm text-slate-700">${esc(p.name)}</span>`).join("") : emptyHTML("Noch keine Personen hinzugefügt.")}</div>
       `) : ""}
@@ -2494,6 +2505,322 @@
     return trip ? [...trip.expenses,...trip.tolls].filter(e=>e.date===daySelected) : [];
   }
 
+  function familyDisplayName() {
+    const metadataName = session?.user?.user_metadata?.urlaub_assistant_name
+      || session?.user?.user_metadata?.urlaub_assistent_name
+      || session?.user?.email?.split("@")[0]
+      || "Familienmitglied";
+    return String(metadataName).trim().slice(0, 64) || "Familienmitglied";
+  }
+
+  function generateFamilyInviteCode() {
+    const chars = SHARE_CHARS;
+    const bytes = new Uint8Array(10);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+      return Array.from(bytes, value => chars[value % chars.length]).join("");
+    }
+    return generateShareCode(10).replaceAll("-", "");
+  }
+
+  function formatFamilyInviteCode(code) {
+    const normalized = String(code || "").replaceAll("-", "").toUpperCase();
+    return normalized.length === 10 ? normalized.slice(0, 5) + "-" + normalized.slice(5) : normalized;
+  }
+
+  async function loadFamily() {
+    if (!session?.user?.id) {
+      family = null;
+      familyMembers = [];
+      familyLoading = false;
+      return;
+    }
+
+    familyLoading = true;
+    try {
+      const membershipResult = await supabase
+        .from("family_members")
+        .select("id, family_id, user_id, role, display_name, joined_at")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+
+      if (membershipResult.error) throw membershipResult.error;
+      if (!membershipResult.data) {
+        family = null;
+        familyMembers = [];
+        familyInviteCode = "";
+        familyLoading = false;
+        familyError = "";
+        return;
+      }
+
+      const familyResult = await supabase
+        .from("families")
+        .select("id, name, owner_user_id, auto_share_new_trips, created_at")
+        .eq("id", membershipResult.data.family_id)
+        .maybeSingle();
+      if (familyResult.error) throw familyResult.error;
+      if (!familyResult.data) throw new Error("Family wurde nicht gefunden.");
+
+      const membersResult = await supabase
+        .from("family_members")
+        .select("id, family_id, user_id, role, display_name, joined_at")
+        .eq("family_id", familyResult.data.id)
+        .order("joined_at", { ascending: true });
+      if (membersResult.error) throw membersResult.error;
+
+      family = familyResult.data;
+      familyMembers = membersResult.data || [];
+      familyError = "";
+    } catch (e) {
+      console.error("Family laden fehlgeschlagen:", e);
+      familyError = "Die Family-Daten konnten nicht geladen werden. Aktualisiere die App und versuche es erneut.";
+    } finally {
+      familyLoading = false;
+    }
+  }
+
+  async function createFamily() {
+    const name = familyNameInput.trim();
+    familyError = "";
+    familyMessage = "";
+    if (!session?.user?.id) {
+      familyError = "Bitte melde dich zuerst an.";
+      render();
+      return;
+    }
+    if (!name) {
+      familyError = "Gib deiner Family zuerst einen Namen.";
+      render();
+      return;
+    }
+    if (name.length > 50) {
+      familyError = "Der Familienname darf höchstens 50 Zeichen lang sein.";
+      render();
+      return;
+    }
+
+    familySaving = true;
+    render();
+    try {
+      const result = await supabase
+        .from("families")
+        .insert({ name, owner_user_id: session.user.id, auto_share_new_trips: false })
+        .select("id")
+        .single();
+      if (result.error) throw result.error;
+
+      familyNameInput = "";
+      familyInviteCode = "";
+      await loadFamily();
+      familyMessage = "Deine Family ist erstellt. Du kannst jetzt Mitglieder einladen.";
+    } catch (e) {
+      console.error("Family erstellen fehlgeschlagen:", e);
+      const message = String(e?.message || "");
+      familyError = message.includes("family_members_user_id_key") || message.includes("duplicate key")
+        ? "Dieses Konto gehört bereits zu einer Family."
+        : "Die Family konnte nicht erstellt werden. Prüfe deine Verbindung und versuche es erneut.";
+    } finally {
+      familySaving = false;
+      render();
+    }
+  }
+
+  async function createFamilyInvite() {
+    if (!family?.id || family.owner_user_id !== session?.user?.id) {
+      familyError = "Nur die Familienadministration kann Einladungen erstellen.";
+      render();
+      return;
+    }
+    familyInviteLoading = true;
+    familyError = "";
+    familyMessage = "";
+    render();
+
+    try {
+      let createdCode = "";
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const code = generateFamilyInviteCode();
+        const result = await supabase.rpc("create_family_invite", {
+          p_family_id: family.id,
+          p_code: code
+        });
+        if (!result.error) {
+          createdCode = code;
+          break;
+        }
+        if (!String(result.error.message || "").toLowerCase().includes("duplicate")) {
+          throw result.error;
+        }
+      }
+      if (!createdCode) throw new Error("Es konnte kein eindeutiger Einladungscode erstellt werden.");
+      familyInviteCode = createdCode;
+      familyMessage = "Einladungscode erstellt. Er ist 7 Tage gültig und kann einmal verwendet werden.";
+    } catch (e) {
+      console.error("Family-Einladung erstellen fehlgeschlagen:", e);
+      familyError = String(e?.message || "").includes("Familienadministration")
+        ? "Nur die Familienadministration kann Einladungen erstellen."
+        : "Der Einladungscode konnte nicht erstellt werden. Bitte versuche es erneut.";
+    } finally {
+      familyInviteLoading = false;
+      render();
+    }
+  }
+
+  async function joinFamilyByCode() {
+    familyError = "";
+    familyMessage = "";
+    const code = familyJoinCodeInput.trim().toUpperCase();
+    if (!code) {
+      familyError = "Gib den Einladungscode ein.";
+      render();
+      return;
+    }
+
+    familySaving = true;
+    render();
+    try {
+      const result = await supabase.rpc("join_family_by_code", {
+        p_code: code,
+        p_display_name: familyDisplayName()
+      });
+      if (result.error) throw result.error;
+
+      familyJoinCodeInput = "";
+      familyInviteCode = "";
+      await loadFamily();
+      familyMessage = "Du bist der Family erfolgreich beigetreten.";
+    } catch (e) {
+      console.error("Family-Beitritt fehlgeschlagen:", e);
+      const message = String(e?.message || "");
+      familyError = message.includes("gültig") || message.includes("abgelaufen")
+        ? "Der Code ist ungültig, bereits verwendet oder abgelaufen."
+        : message.includes("bereits Mitglied")
+          ? message
+          : "Der Family-Beitritt ist fehlgeschlagen. Bitte prüfe den Code und versuche es erneut.";
+    } finally {
+      familySaving = false;
+      render();
+    }
+  }
+
+  async function toggleFamilyAutoShare() {
+    if (!family?.id || family.owner_user_id !== session?.user?.id || familySaving) return;
+    const nextValue = !family.auto_share_new_trips;
+    familySaving = true;
+    familyError = "";
+    familyMessage = "";
+    render();
+    try {
+      const result = await supabase
+        .from("families")
+        .update({ auto_share_new_trips: nextValue })
+        .eq("id", family.id)
+        .eq("owner_user_id", session.user.id)
+        .select("id, name, owner_user_id, auto_share_new_trips, created_at")
+        .single();
+      if (result.error) throw result.error;
+      family = result.data;
+      familyMessage = nextValue
+        ? "Automatisches Teilen ist aktiviert. Nur neu erstellte Urlaube werden automatisch geteilt."
+        : "Automatisches Teilen ist ausgeschaltet.";
+    } catch (e) {
+      console.error("Family-Freigabe speichern fehlgeschlagen:", e);
+      familyError = "Die Einstellung konnte nicht gespeichert werden. Bitte versuche es erneut.";
+    } finally {
+      familySaving = false;
+      render();
+    }
+  }
+
+  async function copyFamilyInviteCode() {
+    if (!familyInviteCode) return;
+    const formatted = formatFamilyInviteCode(familyInviteCode);
+    try {
+      await navigator.clipboard.writeText(formatted);
+      familyMessage = "Einladungscode wurde kopiert.";
+      familyError = "";
+    } catch {
+      familyMessage = "Kopieren nicht verfügbar. Du kannst den angezeigten Code manuell kopieren.";
+    }
+    render();
+  }
+
+  function familyCardHTML() {
+    const currentUserId = session?.user?.id;
+    const isOwner = Boolean(family && family.owner_user_id === currentUserId);
+    const familyStatus = familyMessage
+      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl ${familyMessage.startsWith("Automatisches Teilen ist aktiviert") || familyMessage.startsWith("Deine Family ist erstellt") || familyMessage.startsWith("Du bist der Family") || familyMessage.includes("kopiert") ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-blue-50 text-blue-800 ring-1 ring-blue-100"} px-3 py-3 text-sm">${icon("check-circle-2","h-4 w-4 shrink-0 mt-0.5")}${esc(familyMessage)}</div>`
+      : "";
+    const familyProblem = familyError
+      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${icon("alert-circle","h-4 w-4 shrink-0 mt-0.5")}${esc(familyError)}</div>`
+      : "";
+
+    if (familyLoading) {
+      return cardHTML("Family", "Gemeinsam planen. Gemeinsam reisen.", "users-round", `
+        <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500">${icon("loader-circle","h-5 w-5 animate-spin text-blue-600")} Family wird geladen …</div>
+      `);
+    }
+
+    if (!family) {
+      return cardHTML("Family", "Gemeinsam planen. Gemeinsam reisen.", "users-round", `
+        <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+          <div class="flex items-start gap-3">
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm ring-1 ring-blue-100">${icon("users-round","h-5 w-5")}</span>
+            <div><div class="font-semibold text-slate-900">Deine Familie an einem Ort</div><p class="mt-1 text-sm leading-5 text-slate-600">Lade deine Familie ein, plant Urlaube gemeinsam und teile neue Reisen bei Bedarf automatisch.</p></div>
+          </div>
+        </div>
+        <div class="mt-4 space-y-3">
+          <label class="block space-y-1"><span class="text-xs font-medium text-slate-500">Name deiner Family</span>${inputHTML("text", familyNameInput, "z. B. Familie", `id="family-name" maxlength="50" autocomplete="off"`)}</label>
+          <button type="button" data-action="create-family" ${familySaving ? "disabled" : ""} class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[.99] disabled:opacity-50">${familySaving ? icon("loader-circle","h-4 w-4 animate-spin") : icon("users-round","h-4 w-4")} Family erstellen</button>
+        </div>
+        <div class="my-5 border-t border-slate-100"></div>
+        <div><div class="font-semibold text-slate-900">Schon eingeladen?</div><p class="mt-1 text-sm text-slate-500">Gib den einmaligen Familiencode ein, den du erhalten hast.</p>
+          <div class="mt-3 space-y-3">${inputHTML("text", familyJoinCodeInput, "10-stelliger Einladungscode", `id="family-join-code" maxlength="16" autocapitalize="characters" autocomplete="off"`)}
+            <button type="button" data-action="join-family" ${familySaving ? "disabled" : ""} class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-semibold text-white transition hover:bg-slate-800 active:scale-[.99] disabled:opacity-50">${familySaving ? icon("loader-circle","h-4 w-4 animate-spin") : icon("log-in","h-4 w-4")} Family beitreten</button>
+          </div>
+        </div>
+        ${familyProblem}${familyStatus}
+      `);
+    }
+
+    const members = familyMembers.map(member => {
+      const isCurrent = member.user_id === currentUserId;
+      const memberName = isCurrent ? "Du" : (member.display_name || (member.role === "owner" ? "Familienadministrator" : "Familienmitglied"));
+      const memberRole = member.role === "owner" ? (isCurrent ? "Familienadministrator" : "Familienadmin") : (isCurrent ? "Dein Konto" : "Familienmitglied");
+      return `<div class="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${member.role === "owner" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}">${icon(member.role === "owner" ? "shield-check" : "user-round","h-5 w-5")}</span>
+        <div class="min-w-0 flex-1"><div class="truncate text-sm font-semibold text-slate-900">${esc(memberName)}</div><div class="mt-0.5 text-xs text-slate-500">${esc(memberRole)}</div></div>
+        ${member.role === "owner" ? `<span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">Admin</span>` : ""}
+      </div>`;
+    }).join("");
+
+    return cardHTML("Family", "Gemeinsam planen. Gemeinsam reisen.", "users-round", `
+      <div class="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+        <div class="flex items-start gap-3">
+          <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-700 shadow-sm ring-1 ring-blue-100">${icon("users-round","h-6 w-6")}</span>
+          <div class="min-w-0 flex-1"><div class="text-lg font-semibold text-slate-900">${esc(family.name)}</div><div class="mt-1 text-sm text-slate-600">${familyMembers.length} ${familyMembers.length === 1 ? "Mitglied" : "Mitglieder"} · gemeinsame Reiseplanung</div></div>
+          <span class="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">Aktiv</span>
+        </div>
+      </div>
+      <div class="mt-4"><div class="mb-2 flex items-center justify-between gap-3"><h3 class="text-sm font-semibold text-slate-900">Familienmitglieder</h3><span class="text-xs text-slate-500">${familyMembers.length} insgesamt</span></div><div class="space-y-2">${members || emptyHTML("Noch keine Mitglieder vorhanden.")}</div></div>
+      <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="flex items-start gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">${icon("user-plus","h-5 w-5")}</span>
+          <div class="min-w-0 flex-1"><div class="font-semibold text-slate-900">Familienmitglied einladen</div><p class="mt-1 text-sm leading-5 text-slate-500">${isOwner ? "Erstelle einen einmal verwendbaren Einladungscode. Er ist sieben Tage gültig." : "Bitte deine Familienadministration, einen Einladungscode für weitere Mitglieder zu erstellen."}</p></div>
+        </div>
+        ${isOwner ? `<button type="button" data-action="create-family-invite" ${familyInviteLoading ? "disabled" : ""} class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50">${familyInviteLoading ? icon("loader-circle","h-4 w-4 animate-spin") : icon("user-plus","h-4 w-4")} ${familyInviteCode ? "Neuen Einladungscode erstellen" : "Einladungscode erstellen"}</button>` : ""}
+        ${familyInviteCode ? `<div class="mt-3 rounded-2xl bg-slate-900 p-4 text-white"><div class="text-xs font-medium uppercase tracking-wider text-white/60">Dein Einladungscode</div><div class="mt-2 text-center text-2xl font-bold tracking-[0.16em]">${esc(formatFamilyInviteCode(familyInviteCode))}</div><button type="button" data-action="copy-family-invite-code" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-blue-50">${icon("copy","h-4 w-4")} Code kopieren</button></div>` : ""}
+      </div>
+      <button type="button" data-action="toggle-family-auto-share" role="switch" aria-checked="${Boolean(family.auto_share_new_trips)}" ${(!isOwner || familySaving) ? "disabled" : ""} class="mt-4 flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left transition hover:border-blue-200 hover:bg-blue-50/30 disabled:cursor-default">
+        <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">${icon("send","h-5 w-5")}</span>
+        <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Neue Urlaube automatisch teilen</span><span class="mt-1 block text-xs leading-5 text-slate-500">${family.auto_share_new_trips ? "Aktiv: Neue Urlaube werden mit allen Familienmitgliedern geteilt. Gilt nur für künftige Urlaube." : "Aus: Du kannst jeden Urlaub einzeln teilen. Bestehende Urlaube bleiben unverändert."}</span>${!isOwner ? `<span class="mt-1 block text-xs text-slate-400">Diese Einstellung wird von der Familienadministration verwaltet.</span>` : ""}</span>
+        <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${family.auto_share_new_trips ? "bg-blue-600" : "bg-slate-200"}"><span class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition ${family.auto_share_new_trips ? "translate-x-[22px]" : "translate-x-0.5"}"></span></span>
+      </button>
+      ${familyProblem}${familyStatus}
+    `);
+  }
+
   async function loadTrips() {
     if (!session) return;
     error = "";
@@ -2544,6 +2871,7 @@
       if (selectedTripId && !trips.some(t=>t.id===selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
       await loadAIChatHistory();
+      await loadFamily();
     } catch (e) {
       error = "Daten konnten nicht geladen werden. Überprüfe ggf. deine Internetverbindung.";
     } finally {
@@ -2976,6 +3304,8 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
     if(g("debt-amount"))debtForm.amount=g("debt-amount").value;
     if(g("debt-note"))debtForm.note=g("debt-note").value;
     if(g("join-code"))joinCode=g("join-code").value;
+    if(g("family-name"))familyNameInput=g("family-name").value;
+    if(g("family-join-code"))familyJoinCodeInput=g("family-join-code").value;
     if(g("recovery-password"))recoveryPassword=g("recovery-password").value;
     if(g("recovery-password2"))recoveryPassword2=g("recovery-password2").value;
     if(g("delete-email"))deleteEmail=g("delete-email").value;
@@ -3182,6 +3512,11 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="copy-share-code"){try{await navigator.clipboard.writeText(shareCode);}catch{}return;}
       if(action==="open-join"){joinDialogOpen=true;joinMessage="";joinCode="";render();return;}
       if(action==="close-join"){joinDialogOpen=false;joinMessage="";joinCode="";render();return;}
+      if(action==="create-family"){await createFamily();return;}
+      if(action==="join-family"){await joinFamilyByCode();return;}
+      if(action==="create-family-invite"){await createFamilyInvite();return;}
+      if(action==="copy-family-invite-code"){await copyFamilyInviteCode();return;}
+      if(action==="toggle-family-auto-share"){await toggleFamilyAutoShare();return;}
       if(action==="join-trip"){await joinSharedTrip();return;}
       if(action==="add-person"){await addPerson();return;}
       if(action==="select-person"){selectedPersonId=el.dataset.id;personPanel="overview";personExpensesExpanded=false;owesExpanded=false;owedToExpanded=false;loadPersonMeta();const current=personMeta.budgets[selectedPersonId]||0;personBudgetInput=current?String(current):"";render();return;}
