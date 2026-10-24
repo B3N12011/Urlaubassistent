@@ -170,7 +170,66 @@
     .ai-markdown blockquote { margin: .8rem 0; padding: .7rem .85rem; border-left: 3px solid #60a5fa; border-radius: 0 .8rem .8rem 0; background: #eff6ff; color: #334155; }
     .ai-markdown hr { margin: 1rem 0; border: 0; border-top: 1px solid #e2e8f0; }
     .ai-chat-disclaimer { padding: 10px 8px 2px; color: #94a3b8; text-align: center; font-size: 10px; line-height: 1.55; }
-  </style>
+  
+    .ua-status-screen {
+      background:
+        radial-gradient(ellipse at 50% 42%, rgba(219,234,254,0.50) 0%, rgba(248,250,252,0.88) 42%, #f8fafc 78%),
+        #f8fafc;
+      isolation: isolate;
+    }
+    .ua-status-glow {
+      position: absolute;
+      width: 18rem;
+      height: 18rem;
+      border-radius: 9999px;
+      filter: blur(54px);
+      pointer-events: none;
+      opacity: 0.52;
+    }
+    .ua-status-glow-one {
+      top: -8rem;
+      left: -8rem;
+      background: rgba(147,197,253,0.28);
+    }
+    .ua-status-glow-two {
+      right: -9rem;
+      bottom: -10rem;
+      background: rgba(191,219,254,0.44);
+    }
+    .ua-app-mark {
+      animation: ua-logo-arrive 650ms cubic-bezier(.2,.75,.25,1) both;
+    }
+    .ua-loading-dots span {
+      display: block;
+      width: 9px;
+      height: 9px;
+      border-radius: 9999px;
+      background: #2563eb;
+      opacity: .45;
+      transform: translateY(0) scale(.82);
+      animation: ua-dot-bounce 850ms ease-in-out infinite;
+    }
+    .ua-loading-dots span:nth-child(2) { animation-delay: 150ms; }
+    .ua-loading-dots span:nth-child(3) { animation-delay: 300ms; }
+    .ua-offline-mark {
+      animation: ua-offline-arrive 450ms cubic-bezier(.2,.75,.25,1) both;
+    }
+    @keyframes ua-dot-bounce {
+      0%, 60%, 100% { transform: translateY(0) scale(.82); opacity: .45; }
+      30% { transform: translateY(-9px) scale(1); opacity: 1; }
+    }
+    @keyframes ua-logo-arrive {
+      from { opacity: 0; transform: translateY(7px) scale(.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes ua-offline-arrive {
+      from { opacity: 0; transform: translateY(6px) scale(.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-app-mark, .ua-offline-mark, .ua-loading-dots span { animation: none !important; }
+    }
+</style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900">
 
@@ -573,8 +632,8 @@
     }
 
     if (checking) {
-      // Das separate Vollbild-Ladeelement wird bewusst nicht mehr angezeigt.
-      root.innerHTML = "";
+      root.innerHTML = loadingHTML();
+      lucide.createIcons();
       return;
     }
 
@@ -658,12 +717,35 @@
     </button>`;
   }
 
+  function loadingHTML() {
+    return `<div class="ua-status-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6 text-slate-900">
+      <div class="ua-status-glow ua-status-glow-one"></div>
+      <div class="ua-status-glow ua-status-glow-two"></div>
+      <div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center">
+        <img src="icon-192.png" alt="Urlaubassistent" width="104" height="104" class="ua-app-mark mb-5 h-[104px] w-[104px] rounded-[28px] object-cover shadow-xl shadow-blue-900/15 ring-1 ring-white/80" />
+        <h1 class="text-xl font-bold tracking-tight text-slate-900">Urlaubassistent</h1>
+        <p class="mt-1 text-sm text-slate-500">Dein Urlaub. Alles im Blick.</p>
+        <div class="ua-loading-dots mt-7 flex items-center justify-center gap-2.5" role="status" aria-label="Urlaubassistent wird geladen">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function offlineHTML() {
-    return `<div class="fixed inset-0 z-[200] flex min-h-screen items-center justify-center bg-white px-6 text-slate-900">
-      <div class="flex w-full max-w-md flex-col items-center text-center">
-        <div class="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-slate-100">${icon("wifi-off", "h-12 w-12 text-slate-700")}</div>
-        <h1 class="text-2xl font-bold tracking-tight">Keine Internetverbindung</h1>
-        <p class="mt-3 max-w-sm text-sm leading-6 text-slate-500">Bitte überprüfe deine Verbindung und versuche es erneut.</p>
+    return `<div class="ua-status-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6 text-slate-900">
+      <div class="ua-status-glow ua-status-glow-one"></div>
+      <div class="ua-status-glow ua-status-glow-two"></div>
+      <div class="relative z-10 flex w-full max-w-md flex-col items-center text-center">
+        <div class="ua-offline-mark mb-6 flex h-28 w-28 items-center justify-center rounded-[34px] bg-white text-blue-700 shadow-xl shadow-blue-900/10 ring-1 ring-blue-100">
+          ${icon("wifi-off", "h-14 w-14")}
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Keine WLAN-Verbindung</h1>
+        <p class="mt-3 max-w-sm text-sm leading-6 text-slate-600 sm:text-base">Du hast gerade keine Internetverbindung. Bitte verbinde dich mit WLAN oder aktiviere mobile Daten und versuche es erneut.</p>
+        <div class="mt-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm">
+          ${icon("wifi-off", "h-4 w-4 text-slate-400")}
+          Verbindung wird automatisch erkannt
+        </div>
       </div>
     </div>`;
   }
@@ -3842,7 +3924,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=19").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=20").catch(() => {});
     }, { once: true });
   }
 
