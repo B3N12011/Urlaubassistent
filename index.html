@@ -317,6 +317,8 @@
   let familyInviteCode = "";
   let familyMessage = "";
   let familyError = "";
+  let familySharedTripIds = new Set();
+  let familyTripsExpanded = false;
   let showDeleteAccount = false;
   let realtimeChannel = null;
 
@@ -2548,6 +2550,7 @@
       if (!membershipResult.data) {
         family = null;
         familyMembers = [];
+        familySharedTripIds = new Set();
         familyInviteCode = "";
         familyLoading = false;
         familyError = "";
@@ -2572,6 +2575,7 @@
       family = familyResult.data;
       familyMembers = membersResult.data || [];
       familyError = "";
+      await refreshFamilySharedTripStatus();
     } catch (e) {
       console.error("Family laden fehlgeschlagen:", e);
       familyError = "Die Family-Daten konnten nicht geladen werden. Aktualisiere die App und versuche es erneut.";
@@ -2704,6 +2708,82 @@
     }
   }
 
+  async function refreshFamilySharedTripStatus() {
+    familySharedTripIds = new Set();
+    if (!family?.id || !session?.user?.id || !familyMembers.length) return;
+
+    const familyUserIds = [...new Set(familyMembers.map(member => member.user_id).filter(Boolean))];
+    const otherFamilyUserIds = familyUserIds.filter(userId => userId !== session.user.id);
+    const ownedTripIds = trips.filter(trip => trip.role === "owner").map(trip => trip.id);
+
+    // Sharing one’s own trips only becomes meaningful when another family member exists.
+    if (!otherFamilyUserIds.length || !ownedTripIds.length) return;
+
+    try {
+      const result = await supabase
+        .from("trip_members")
+        .select("trip_id, user_id")
+        .in("trip_id", ownedTripIds)
+        .in("user_id", familyUserIds);
+      if (result.error) throw result.error;
+
+      const membersByTrip = new Map();
+      (result.data || []).forEach(row => {
+        const ids = membersByTrip.get(row.trip_id) || new Set();
+        ids.add(row.user_id);
+        membersByTrip.set(row.trip_id, ids);
+      });
+
+      const sharedIds = new Set();
+      ownedTripIds.forEach(tripId => {
+        const included = membersByTrip.get(tripId) || new Set();
+        if (familyUserIds.every(userId => included.has(userId))) sharedIds.add(tripId);
+      });
+      familySharedTripIds = sharedIds;
+    } catch (e) {
+      // The share action itself remains available; it is safe to retry because the RPC is idempotent.
+      console.warn("Family-Urlaubsfreigaben konnten nicht geprüft werden:", e);
+    }
+  }
+
+  async function shareTripWithFamily(tripId) {
+    const trip = trips.find(item => item.id === tripId);
+    if (!session?.user?.id || !family?.id) {
+      familyError = "Erstelle zuerst eine Family oder tritt einer Family bei.";
+      render();
+      return;
+    }
+    if (!trip || trip.role !== "owner") {
+      familyError = "Du kannst nur Urlaube teilen, die du selbst erstellt hast.";
+      render();
+      return;
+    }
+    if (familySaving) return;
+
+    familySaving = true;
+    familyError = "";
+    familyMessage = "";
+    render();
+    try {
+      const result = await supabase.rpc("share_trip_with_family", { p_trip_id: tripId });
+      if (result.error) throw result.error;
+      const addedCount = Number(result.data || 0);
+      await refreshFamilySharedTripStatus();
+      familyMessage = addedCount > 0
+        ? `„${trip.name}“ wurde mit ${addedCount} Familienmitglied${addedCount === 1 ? "" : "ern"} geteilt.`
+        : `„${trip.name}“ ist bereits mit allen Familienmitgliedern geteilt.`;
+    } catch (e) {
+      console.error("Urlaub mit Family teilen fehlgeschlagen:", e);
+      const msg = String(e?.message || "");
+      familyError = msg.includes("Family") || msg.includes("Familien")
+        ? msg
+        : "Der Urlaub konnte nicht mit der Family geteilt werden. Bitte versuche es erneut.";
+    } finally {
+      familySaving = false;
+      render();
+    }
+  }
+
   async function toggleFamilyAutoShare() {
     if (!family?.id || family.owner_user_id !== session?.user?.id || familySaving) return;
     const nextValue = !family.auto_share_new_trips;
@@ -2817,6 +2897,39 @@
         <span class="min-w-0 flex-1"><span class="block text-sm font-semibold text-slate-900">Neue Urlaube automatisch teilen</span><span class="mt-1 block text-xs leading-5 text-slate-500">${family.auto_share_new_trips ? "Aktiv: Neue Urlaube werden mit allen Familienmitgliedern geteilt. Gilt nur für künftige Urlaube." : "Aus: Du kannst jeden Urlaub einzeln teilen. Bestehende Urlaube bleiben unverändert."}</span>${!isOwner ? `<span class="mt-1 block text-xs text-slate-400">Diese Einstellung wird von der Familienadministration verwaltet.</span>` : ""}</span>
         <span class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${family.auto_share_new_trips ? "bg-blue-600" : "bg-slate-200"}"><span class="inline-block h-5 w-5 rounded-full bg-white shadow-sm transition ${family.auto_share_new_trips ? "translate-x-[22px]" : "translate-x-0.5"}"></span></span>
       </button>
+      <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="flex items-start gap-3">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">${icon("calendar-check","h-5 w-5")}</span>
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold text-slate-900">Bestehende Urlaube teilen</div>
+            <p class="mt-1 text-sm leading-5 text-slate-500">Wähle ältere Reisen aus, die deine Familienmitglieder ebenfalls sehen und gemeinsam bearbeiten dürfen.</p>
+          </div>
+        </div>
+        ${familyMembers.filter(member => member.user_id !== currentUserId).length === 0
+          ? `<div class="mt-3 rounded-xl bg-blue-50 px-3 py-3 text-sm leading-5 text-blue-800">Sobald mindestens ein weiteres Familienmitglied beigetreten ist, kannst du hier bestehende Urlaube freigeben.</div>`
+          : (() => {
+              const ownTrips = trips.filter(trip => trip.role === "owner");
+              const visibleTrips = familyTripsExpanded ? ownTrips : ownTrips.slice(0, 5);
+              return ownTrips.length
+                ? `<div class="mt-3 space-y-2">${visibleTrips.map(trip => {
+                    const alreadyShared = familySharedTripIds.has(trip.id);
+                    return `<div class="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:flex-row sm:items-center">
+                      <div class="min-w-0 flex-1">
+                        <div class="truncate text-sm font-semibold text-slate-900">${esc(trip.name)}</div>
+                        <div class="mt-0.5 truncate text-xs text-slate-500">${esc(trip.destination || "Kein Reiseziel")} · ${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}</div>
+                      </div>
+                      <button type="button" data-action="share-trip-family" data-id="${esc(trip.id)}" ${(familySaving || alreadyShared) ? "disabled" : ""} class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${alreadyShared ? "bg-emerald-50 text-emerald-700" : "bg-blue-600 text-white hover:bg-blue-700"} disabled:cursor-default disabled:opacity-90">
+                        ${alreadyShared ? icon("check-circle-2","h-4 w-4") : icon("users-round","h-4 w-4")}
+                        ${alreadyShared ? "Mit Family geteilt" : "Mit Family teilen"}
+                      </button>
+                    </div>`;
+                  }).join("")}</div>
+                  ${ownTrips.length > 5 ? `<button type="button" data-action="toggle-family-trip-list" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">${icon(familyTripsExpanded ? "chevron-up" : "chevron-down","h-4 w-4")}${familyTripsExpanded ? "Weniger Urlaube anzeigen" : `Alle ${ownTrips.length} Urlaube anzeigen`}</button>` : ""}
+                `
+                : `<div class="mt-3 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">Du hast noch keine selbst erstellten Urlaube.</div>`;
+            })()
+        }
+      </div>
       ${familyProblem}${familyStatus}
     `);
   }
@@ -2905,6 +3018,9 @@
 
   async function createTrip() {
     if (!newTrip.name.trim()) return;
+    const shouldAutoShare = Boolean(family?.auto_share_new_trips);
+    let autoShareMessage = "";
+    let autoShareError = "";
     try {
       const {data,error:insertError} = await supabase.from("trips").insert({user_id:session.user.id,name:newTrip.name.trim(),destination:newTrip.destination.trim(),start_date:newTrip.startDate||iso(),end_date:newTrip.endDate||iso(),budget:Number(newTrip.budget||0),status:"geplant"}).select("*").single();
       if (insertError) throw insertError;
@@ -2915,11 +3031,30 @@
         if (person.error) throw person.error;
         addActivity(data.id,`hat den Urlaub „${data.name}“ erstellt`,"map");
         broadcastActivity(data.id,`hat den Urlaub „${data.name}“ erstellt`,"map");
+
+        if (shouldAutoShare) {
+          try {
+            const shareResult = await supabase.rpc("share_trip_with_family", { p_trip_id: data.id });
+            if (shareResult.error) throw shareResult.error;
+            const addedCount = Number(shareResult.data || 0);
+            autoShareMessage = addedCount > 0
+              ? `Der neue Urlaub „${data.name}“ wurde mit ${addedCount} Familienmitglied${addedCount === 1 ? "" : "ern"} geteilt.`
+              : (familyMembers.filter(member => member.user_id !== session.user.id).length
+                  ? `Der Urlaub „${data.name}“ ist bereits mit allen Familienmitgliedern geteilt.`
+                  : "Der Urlaub wurde erstellt. Sobald weitere Familienmitglieder beitreten, können sie diesen Urlaub ebenfalls erhalten.");
+          } catch (shareError) {
+            console.error("Automatisches Family-Teilen fehlgeschlagen:", shareError);
+            autoShareError = "Der Urlaub wurde erstellt, aber nicht automatisch mit der Family geteilt. Du kannst ihn unten unter „Bestehende Urlaube teilen“ freigeben.";
+          }
+        }
       }
       newTrip={name:"",destination:"",startDate:"",endDate:"",budget:""};
       selectedTripId=data?.id||null;
       daySelected=iso();
       await loadTrips();
+      if (autoShareError) { familyError = autoShareError; familyMessage = ""; }
+      else if (autoShareMessage) { familyMessage = autoShareMessage; familyError = ""; }
+      if (autoShareError || autoShareMessage) render();
     } catch(e) { error=e.message||"Urlaub konnte nicht erstellt werden."; render(); }
   }
 
@@ -3517,6 +3652,8 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="create-family-invite"){await createFamilyInvite();return;}
       if(action==="copy-family-invite-code"){await copyFamilyInviteCode();return;}
       if(action==="toggle-family-auto-share"){await toggleFamilyAutoShare();return;}
+      if(action==="share-trip-family"){await shareTripWithFamily(el.dataset.id);return;}
+      if(action==="toggle-family-trip-list"){familyTripsExpanded=!familyTripsExpanded;render();return;}
       if(action==="join-trip"){await joinSharedTrip();return;}
       if(action==="add-person"){await addPerson();return;}
       if(action==="select-person"){selectedPersonId=el.dataset.id;personPanel="overview";personExpensesExpanded=false;owesExpanded=false;owedToExpanded=false;loadPersonMeta();const current=personMeta.budgets[selectedPersonId]||0;personBudgetInput=current?String(current):"";render();return;}
