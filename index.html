@@ -279,6 +279,8 @@
   let session = null;
   let acceptedCookies = true;
   let recovery = false;
+  const splashStartedAt = Date.now();
+  const MIN_SPLASH_MS = 2600;
   let checking = true;
   let offline = !navigator.onLine;
   let error = "";
@@ -3937,21 +3939,31 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=20").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=21").catch(() => {});
     }, { once: true });
   }
 
   const params=new URLSearchParams(location.search);
   recovery=params.get("type")==="recovery";
 
-  supabase.auth.getSession().then(({data})=>{
+  const waitForMinimumSplash = () => new Promise(resolve => {
+    const remaining = MIN_SPLASH_MS - (Date.now() - splashStartedAt);
+    window.setTimeout(resolve, Math.max(0, remaining));
+  });
+
+  supabase.auth.getSession().then(async ({data})=>{
     session=data.session||null;
     settingsUsername=session?.user?.user_metadata?.urlaub_assistent_name||"";
+    await waitForMinimumSplash();
     checking=false;
     acceptedCookies=true;
     if(session && !recovery){loadTrips();}
     else{render();}
-  }).catch(()=>{checking=false;render();});
+  }).catch(async ()=>{
+    await waitForMinimumSplash();
+    checking=false;
+    render();
+  });
 
   supabase.auth.onAuthStateChange((_event,nextSession)=>{
     session=nextSession;
