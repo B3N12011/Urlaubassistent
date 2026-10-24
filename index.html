@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="/manifest.json" />
+  <link rel="manifest" href="manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -2825,7 +2825,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
   async function resetPassword(){
     if(!authEmail.trim()){authResetMessage="Bitte zuerst deine E-Mail eintragen.";render();return;}
     authLoading=true;authResetMessage="";render();
-    try{const redirectTo="https://urlaub-assistent.netlify.app/?type=recovery";const {error:e}=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo});if(e)throw e;authResetMessage="Wenn zu dieser E-Mail ein Konto existiert, wurde eine Reset-Mail verschickt.";}catch(e){authResetMessage=e.message||"Reset konnte nicht gestartet werden.";}finally{authLoading=false;render();}
+    try{const redirectTo=window.location.origin+window.location.pathname+"?type=recovery";const {error:e}=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo});if(e)throw e;authResetMessage="Wenn zu dieser E-Mail ein Konto existiert, wurde eine Reset-Mail verschickt.";}catch(e){authResetMessage=e.message||"Reset konnte nicht gestartet werden.";}finally{authLoading=false;render();}
   }
 
   async function updatePassword(){
