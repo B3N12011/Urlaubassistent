@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Urlaubassistent</title>
-  <link rel="icon" type="image/png" href="/icon-192.png?v=15" />
-  <link rel="apple-touch-icon" href="/icon-192.png?v=15" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
   <meta name="theme-color" content="#0F172A" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Urlaubassistent" />
-  <link rel="manifest" href="/manifest.json?v=15" />
+  <link rel="manifest" href="/manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3332,7 +3332,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=15").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=16").catch(() => {});
     }, { once: true });
   }
 
