@@ -3735,7 +3735,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
         throw new Error("Der Server hat die Kontolöschung nicht bestätigt. Bitte prüfe den Status, bevor du es erneut versuchst.");
       }
 
-      await supabase.auth.signOut().catch(() => {});
+      await supabase.auth.signOut({ scope: "local" }).catch(() => {});
       session = null;
       showDeleteAccount = false;
       authMode = "signin";
@@ -4358,7 +4358,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=38").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=39").catch(() => {});
     }, { once: true });
   }
 
