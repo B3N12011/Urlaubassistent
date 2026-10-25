@@ -2994,7 +2994,7 @@
           ? "Die Datenbank hat das Erstellen aus Sicherheitsgründen abgelehnt. Die Berechtigung wurde korrigiert. Aktualisiere die App und versuche es erneut, falls dieser Fehler bleibt."
           : /fetch|network|failed to fetch|offline|timeout/i.test(message)
             ? "Es konnte keine Verbindung zum Server hergestellt werden. Prüfe WLAN oder mobile Daten und versuche es erneut."
-            : "Die Family konnte nicht erstellt werden" + (message ? ": " + message : ". Bitte versuche es erneut.");
+            : friendlyAppError(e, "Erstellen der Family");
     } finally {
       familySaving = false;
       render();
@@ -3035,7 +3035,7 @@
       console.error("Family-Einladung erstellen fehlgeschlagen:", e);
       familyError = String(e?.message || "").includes("Familienadministration")
         ? "Nur die Familienadministration kann Einladungen erstellen."
-        : "Der Einladungscode konnte nicht erstellt werden. Bitte versuche es erneut.";
+        : friendlyAppError(e, "Erstellen des Einladungscodes");
     } finally {
       familyInviteLoading = false;
       render();
@@ -3072,7 +3072,7 @@
         ? "Der Code ist ungültig, bereits verwendet oder abgelaufen."
         : message.includes("bereits Mitglied")
           ? message
-          : "Der Family-Beitritt ist fehlgeschlagen. Bitte prüfe den Code und versuche es erneut.";
+          : friendlyAppError(e, "Beitreten zur Family");
     } finally {
       familySaving = false;
       render();
@@ -3148,7 +3148,7 @@
       const msg = String(e?.message || "");
       familyError = msg.includes("Family") || msg.includes("Familien")
         ? msg
-        : "Der Urlaub konnte nicht mit der Family geteilt werden. Bitte versuche es erneut.";
+        : friendlyAppError(e, "Teilen des Urlaubs mit der Family");
     } finally {
       familySaving = false;
       render();
@@ -3190,7 +3190,7 @@
       console.error("Family umbenennen fehlgeschlagen:", e);
       familyError = e?.code === "42501"
         ? "Du hast keine Berechtigung, diese Family zu bearbeiten."
-        : "Der Familienname konnte nicht gespeichert werden" + (e?.message ? ": " + e.message : ".");
+        : friendlyAppError(e, "Speichern des Familiennamens");
     } finally {
       familySaving = false;
       render();
@@ -3227,7 +3227,7 @@
       console.error("Family löschen fehlgeschlagen:", e);
       familyError = e?.code === "42501"
         ? "Du hast keine Berechtigung, diese Family zu löschen."
-        : "Die Family konnte nicht gelöscht werden" + (e?.message ? ": " + e.message : ".");
+        : friendlyAppError(e, "Löschen der Family");
     } finally {
       familySaving = false;
       render();
@@ -3256,7 +3256,7 @@
         : "Automatisches Teilen ist ausgeschaltet.";
     } catch (e) {
       console.error("Family-Freigabe speichern fehlgeschlagen:", e);
-      familyError = "Die Einstellung konnte nicht gespeichert werden. Bitte versuche es erneut.";
+      familyError = friendlyAppError(e, "Speichern der Family-Einstellung");
     } finally {
       familySaving = false;
       render();
@@ -4130,7 +4130,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
           if(e)throw e;
           session={...session,user:{...session.user,user_metadata:{...(session.user.user_metadata||{}),...(data?.user?.user_metadata||{}),urlaub_assistent_name:name}}};
           settingsMessage="Name erfolgreich gespeichert.";
-        }catch(e){settingsMessage=e.message||"Name konnte nicht gespeichert werden.";}
+        }catch(e){settingsMessage=friendlyAppError(e,"Speichern des Benutzernamens");}
         render();
         return;
       }
@@ -4141,7 +4141,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
           const {error:e}=await supabase.auth.updateUser({password:settingsPassword});
           if(e)throw e;
           settingsPassword="";settingsPassword2="";settingsMessage="Passwort erfolgreich geändert.";
-        }catch(e){settingsMessage=e.message||"Passwort konnte nicht geändert werden.";}
+        }catch(e){settingsMessage=friendlyAppError(e,"Ändern des Passworts");}
         render();
         return;
       }
@@ -4358,7 +4358,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=39").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=40").catch(() => {});
     }, { once: true });
   }
 
