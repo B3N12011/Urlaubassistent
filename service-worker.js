@@ -1,4 +1,4 @@
-const CACHE_NAME = 'urlaubassistent-shell-v35';
+const CACHE_NAME = 'urlaubassistent-shell-v36';
 const APP_SHELL = [
   './',
   './index.html',
