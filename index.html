@@ -3456,14 +3456,17 @@
               return ownTrips.length
                 ? `<div class="mt-3 space-y-2">${visibleTrips.map(trip => {
                     const alreadyShared = familySharedTripIds.has(trip.id);
+                    const sharedIds = familySharedTripMemberIds.get(trip.id) || new Set();
+                    const sharedNames = familyMembers.filter(member => member.user_id !== currentUserId && sharedIds.has(member.user_id)).map(member => member.display_name || "Familienmitglied");
                     return `<div class="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:flex-row sm:items-center">
                       <div class="min-w-0 flex-1">
                         <div class="truncate text-sm font-semibold text-slate-900">${esc(trip.name)}</div>
                         <div class="mt-0.5 truncate text-xs text-slate-500">${esc(trip.destination || "Kein Reiseziel")} · ${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}</div>
+                        <div class="mt-2 text-xs leading-5 ${sharedNames.length ? "text-emerald-700" : "text-slate-400"}">${sharedNames.length ? "Geteilt mit: " + esc(sharedNames.join(", ")) : "Noch mit niemandem aus der Family geteilt"}</div>
                       </div>
                       <button type="button" data-action="share-trip-family" data-id="${esc(trip.id)}" ${(familySaving || alreadyShared) ? "disabled" : ""} class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${alreadyShared ? "bg-emerald-50 text-emerald-700" : "bg-slate-900 text-white hover:bg-slate-800"} disabled:cursor-default disabled:opacity-90">
                         ${alreadyShared ? icon("check-circle-2","h-4 w-4") : icon("users-round","h-4 w-4")}
-                        ${alreadyShared ? "Mit Family geteilt" : "Mit Family teilen"}
+                        ${alreadyShared ? "Mit Family geteilt" : sharedNames.length ? "Mit übrigen teilen" : "Mit Family teilen"}
                       </button>
                     </div>`;
                   }).join("")}</div>
@@ -4519,7 +4522,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=45").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=46").catch(() => {});
     }, { once: true });
   }
 
