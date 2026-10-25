@@ -572,6 +572,40 @@
       .replaceAll("'", "&#039;");
   }
 
+  function friendlyAppError(err, operation = "Speichern") {
+    const message = String(err?.message || (typeof err === "string" ? err : "")).trim();
+    const lower = message.toLowerCase();
+    const code = String(err?.code || "").toUpperCase();
+    const status = Number(err?.status || err?.statusCode || 0);
+
+    if (code === "42501" || status === 403 || /row-level security|permission denied|not authorized|insufficient privilege/.test(lower)) {
+      return "Der Server hat den Zugriff verweigert. Prüfe, ob du für diesen Urlaub die nötigen Rechte hast.";
+    }
+    if (status === 401 || code === "PGRST301" || /jwt expired|invalid jwt|refresh token.*(expired|not found)|session has expired/.test(lower)) {
+      return "Deine Anmeldung ist abgelaufen. Melde dich bitte erneut an und versuche es noch einmal.";
+    }
+    if (/failed to fetch|networkerror|network request failed|load failed|err_internet_disconnected|fetch failed|the internet connection appears to be offline/.test(lower) || (err?.name === "TypeError" && /fetch|network|load failed/.test(lower))) {
+      return "Keine Verbindung zum Server. Prüfe WLAN oder mobile Daten und versuche es erneut.";
+    }
+    if (err?.name === "AbortError" || /timed out|timeout|statement timeout/.test(lower)) {
+      return "Der Server antwortet gerade zu langsam. Deine letzte Änderung ist möglicherweise nicht gespeichert. Lade die Daten neu und prüfe den Stand, bevor du es erneut versuchst.";
+    }
+    if (code === "23505") return "Dieser Eintrag existiert bereits. Prüfe, ob du ihn schon angelegt hast.";
+    if (code === "23503") return "Dieser Eintrag ist noch mit anderen Daten verknüpft. Entferne zuerst die Verknüpfung und versuche es erneut.";
+    if (code === "23514" || code === "22P02" || code === "22007" || code === "22008") {
+      return "Einige Angaben werden vom Server nicht akzeptiert. Prüfe deine Eingaben und versuche es erneut.";
+    }
+    if (code === "PGRST116" || /no rows|zero rows/.test(lower)) {
+      return "Der Eintrag wurde nicht gefunden oder wurde inzwischen geändert. Aktualisiere die Ansicht und versuche es erneut.";
+    }
+    if (status >= 500 || /^PGRST2/.test(code) || /^5[0-9A-Z]{4}$/.test(code)) {
+      return "Der Server hat einen Fehler gemeldet. Es ist unklar, ob die letzte Änderung gespeichert wurde. Aktualisiere die Ansicht, bevor du es erneut versuchst.";
+    }
+    if (message && !code && !status) return message;
+    if (code || status) return "Beim " + operation + " ist ein Serverfehler aufgetreten. Bitte versuche es erneut.";
+    return "Beim " + operation + " ist ein Fehler aufgetreten. Bitte versuche es erneut.";
+  }
+
   function icon(name, cls = "h-5 w-5") {
     return `<i data-lucide="${name}" class="${cls}"></i>`;
   }
@@ -2648,7 +2682,7 @@
       if(aiChatStorageKey()!==requestKey)return aiSavedChats;
       aiSavedChats=Array.isArray(data)?data:[];
     } catch(e) {
-      aiChatHistoryError="Der Chat-Verlauf konnte gerade nicht aus deinem Konto geladen werden. Prüfe deine Verbindung.";
+      aiChatHistoryError=friendlyAppError(e,"Laden des Chat-Verlaufs");
       console.warn("Saved AI chats could not be loaded",e?.message||"");
     } finally {
       aiChatHistoryLoading=false;
@@ -2905,7 +2939,7 @@
       await refreshFamilySharedTripStatus();
     } catch (e) {
       console.error("Family laden fehlgeschlagen:", e);
-      familyError = "Die Family-Daten konnten nicht geladen werden. Aktualisiere die App und versuche es erneut.";
+      familyError = friendlyAppError(e, "Laden der Family-Daten");
     } finally {
       familyLoading = false;
     }
@@ -3398,7 +3432,8 @@
       await loadAIChatHistory();
       await loadFamily();
     } catch (e) {
-      error = "Daten konnten nicht geladen werden. Überprüfe ggf. deine Internetverbindung.";
+      console.error("Urlaubsdaten laden fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Laden der Urlaubsdaten");
     } finally {
       render();
       setupRealtime();
@@ -3467,7 +3502,7 @@
       if (autoShareError) { familyError = autoShareError; familyMessage = ""; }
       else if (autoShareMessage) { familyMessage = autoShareMessage; familyError = ""; }
       if (autoShareError || autoShareMessage) render();
-    } catch(e) { error=e.message||"Urlaub konnte nicht erstellt werden."; render(); }
+    } catch(e) { console.error("Urlaub erstellen fehlgeschlagen:", e); error=friendlyAppError(e, "Erstellen des Urlaubs"); render(); }
   }
 
   async function deleteTrip(id) {
@@ -3489,7 +3524,7 @@
       selectedPersonId=null;
       localStorage.removeItem(`urlaubassistent-person-meta-${id}`);
       await loadTrips();
-    } catch(e){error=e.message||"Urlaub konnte nicht gelöscht werden.";render();}
+    } catch(e){console.error("Urlaub löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Urlaubs");render();}
   }
 
   async function addPerson(){
@@ -3497,7 +3532,7 @@
     if(!trip||!newPersonName.trim())return;
     if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     try{const name=newPersonName.trim();const {error:e}=await supabase.from("trip_people").insert({user_id:session.user.id,trip_id:trip.id,name});if(e)throw e;addActivity(trip.id,`hat die Person „${name}“ hinzugefügt`,"user-round-plus");
-      broadcastActivity(trip.id,`hat die Person „${name}“ hinzugefügt`,"user-round-plus");newPersonName="";await loadTrips();}catch(e){error=e.message||"Person konnte nicht hinzugefügt werden.";render();}
+      broadcastActivity(trip.id,`hat die Person „${name}“ hinzugefügt`,"user-round-plus");newPersonName="";await loadTrips();}catch(e){console.error("Person hinzufügen fehlgeschlagen:",e);error=friendlyAppError(e,"Hinzufügen der Person");render();}
   }
 
   async function deletePerson(id){
@@ -3570,13 +3605,13 @@
       broadcastActivity(trip.id, entryText, entryIcon);
       if(kind==="expense"){expenseForm=emptyForm("Essen");expenseCustomCategory="";expenseCategorySearch="";expenseCategoryMoreOpen=false;}else tollForm=emptyForm("Maut");
       await loadTrips();
-    }catch(e){error=e.message||"Eintrag konnte nicht gespeichert werden.";render();}
+    }catch(e){console.error("Eintrag speichern fehlgeschlagen:",e);error=friendlyAppError(e,"Speichern des Eintrags");render();}
   }
 
   async function deleteEntry(kind,id){
     if(activeTrip()?.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     try{const {error:e}=await supabase.from(kind==="expense"?"trip_expenses":"trip_tolls").delete().eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht werden.";render();}
+await loadTrips();}catch(e){console.error("Eintrag löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Eintrags");render();}
   }
 
   async function addList(kind){
@@ -3584,19 +3619,19 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
     if(!trip)return;
     if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     const text=kind==="pack"?newPackItem.trim():newTodoItem.trim();if(!text)return;
-    try{const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").insert({user_id:session.user.id,trip_id:trip.id,text,done:false});if(e)throw e;const listText=kind==="pack"?`hat „${text}“ zur Packliste hinzugefügt`:`hat das To-do „${text}“ hinzugefügt`;const listIcon=kind==="pack"?"clipboard-list":"check-circle-2";addActivity(trip.id,listText,listIcon);broadcastActivity(trip.id,listText,listIcon);if(kind==="pack")newPackItem="";else newTodoItem="";await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht hinzugefügt werden.";render();}
+    try{const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").insert({user_id:session.user.id,trip_id:trip.id,text,done:false});if(e)throw e;const listText=kind==="pack"?`hat „${text}“ zur Packliste hinzugefügt`:`hat das To-do „${text}“ hinzugefügt`;const listIcon=kind==="pack"?"clipboard-list":"check-circle-2";addActivity(trip.id,listText,listIcon);broadcastActivity(trip.id,listText,listIcon);if(kind==="pack")newPackItem="";else newTodoItem="";await loadTrips();}catch(e){console.error("Listeneintrag hinzufügen fehlgeschlagen:",e);error=friendlyAppError(e,"Hinzufügen des Listeneintrags");render();}
   }
 
   async function toggleList(kind,id){
     const trip=activeTrip();if(!trip)return;if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     try{const items=kind==="pack"?trip.packlist:trip.todos;const item=items.find(x=>x.id===id);if(!item)return;const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").update({done:!item.done}).eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht geändert werden.";render();}
+await loadTrips();}catch(e){console.error("Listeneintrag ändern fehlgeschlagen:",e);error=friendlyAppError(e,"Ändern des Listeneintrags");render();}
   }
 
   async function deleteList(kind,id){
     const trip=activeTrip();if(!trip)return;if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
     try{const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").delete().eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht werden.";render();}
+await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Listeneintrags");render();}
   }
 
   async function createShareCode(tripId){
@@ -3613,7 +3648,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         if(!r.error){shareCode=code;done=true;break;}
       }
       if(!done)throw new Error("Es konnte kein eindeutiger Sharing-Code erstellt werden.");
-    }catch(e){error=e.message||"Urlaub konnte nicht geteilt werden.";}finally{shareLoading=false;render();}
+    }catch(e){console.error("Sharing-Code erstellen fehlgeschlagen:",e);error=friendlyAppError(e,"Erstellen des Freigabecodes");}finally{shareLoading=false;render();}
   }
 
   async function joinSharedTrip(){
@@ -3633,7 +3668,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       joinCode="";
       await loadTrips();
       setTimeout(()=>{joinDialogOpen=false;joinMessage="";render();},700);
-    }catch(e){joinMessage=e.message||"Beitreten fehlgeschlagen.";}finally{joinLoading=false;render();}
+    }catch(e){console.error("Geteiltem Urlaub beitreten fehlgeschlagen:",e);joinMessage=friendlyAppError(e,"Beitreten zum geteilten Urlaub");}finally{joinLoading=false;render();}
   }
 
   async function signOut(){await supabase.auth.signOut();session=null;render();}
@@ -3693,19 +3728,19 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
         authMessage="E-Mail oder Passwort stimmen nicht. Falls du dich gerade erst registriert hast, bestätige zuerst die E-Mail-Adresse oder nutze „Passwort vergessen?“.";
       }else if(/email not confirmed/i.test(msg)){
         authMessage="Deine E-Mail-Adresse wurde noch nicht bestätigt. Öffne zuerst die Bestätigungs-Mail.";
-      }else{authMessage=msg;}
+      }else{authMessage=friendlyAppError(e,"Anmelden oder Registrieren");}
     }finally{authLoading=false;render();}
   }
 
   async function resetPassword(){
     if(!authEmail.trim()){authResetMessage="Bitte zuerst deine E-Mail eintragen.";render();return;}
     authLoading=true;authResetMessage="";render();
-    try{const redirectTo=window.location.origin+window.location.pathname+"?type=recovery";const {error:e}=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo});if(e)throw e;authResetMessage="Wenn zu dieser E-Mail ein Konto existiert, wurde eine Reset-Mail verschickt.";}catch(e){authResetMessage=e.message||"Reset konnte nicht gestartet werden.";}finally{authLoading=false;render();}
+    try{const redirectTo=window.location.origin+window.location.pathname+"?type=recovery";const {error:e}=await supabase.auth.resetPasswordForEmail(authEmail.trim(),{redirectTo});if(e)throw e;authResetMessage="Wenn zu dieser E-Mail ein Konto existiert, wurde eine Reset-Mail verschickt.";}catch(e){console.error("Passwort-Reset starten fehlgeschlagen:",e);authResetMessage=friendlyAppError(e,"Starten des Passwort-Resets");}finally{authLoading=false;render();}
   }
 
   async function updatePassword(){
     recoveryLoading=true;recoveryMessage="";render();
-    try{if(recoveryPassword.length<6)throw new Error("Passwort muss mindestens 6 Zeichen haben.");if(recoveryPassword!==recoveryPassword2)throw new Error("Die Passwörter stimmen nicht überein.");const {error:e}=await supabase.auth.updateUser({password:recoveryPassword});if(e)throw e;recoveryMessage="Passwort wurde geändert.";recovery=false;await supabase.auth.getSession();}catch(e){recoveryMessage=e.message||"Passwort konnte nicht geändert werden.";}finally{recoveryLoading=false;render();}
+    try{if(recoveryPassword.length<6)throw new Error("Passwort muss mindestens 6 Zeichen haben.");if(recoveryPassword!==recoveryPassword2)throw new Error("Die Passwörter stimmen nicht überein.");const {error:e}=await supabase.auth.updateUser({password:recoveryPassword});if(e)throw e;recoveryMessage="Passwort wurde geändert.";recovery=false;await supabase.auth.getSession();}catch(e){console.error("Passwort ändern fehlgeschlagen:",e);recoveryMessage=friendlyAppError(e,"Ändern des Passworts");}finally{recoveryLoading=false;render();}
   }
 
   function openCustomExpenseCategoryDialog(category) {
@@ -4261,7 +4296,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=36").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=37").catch(() => {});
     }, { once: true });
   }
 
