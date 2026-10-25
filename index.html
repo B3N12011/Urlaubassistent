@@ -867,32 +867,73 @@
     </div>`;
   }
 
+  function dashboardHeroHTML(trip, totalsData, budgetPct, isUpcoming, days, tripInProgress) {
+    const hour = new Date().getHours();
+    const greeting = hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend";
+    const name = actorName();
+    let html = '<section class="relative overflow-hidden rounded-[2rem] border border-blue-100 bg-gradient-to-br from-white via-sky-50 to-blue-100 p-5 shadow-sm md:p-7">';
+    html += '<div class="pointer-events-none absolute -right-10 -top-12 h-48 w-48 rounded-full bg-blue-200/40 blur-3xl"></div>';
+    html += '<div class="relative flex items-start justify-between gap-4"><div class="min-w-0">';
+    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm">' + icon("sparkles", "h-3.5 w-3.5") + ' DEIN REISE-ASSISTENT</div>';
+    html += '<h1 class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">' + greeting + ', ' + esc(name) + '!</h1>';
+    html += '<p class="mt-2 max-w-xl text-sm leading-6 text-slate-600 md:text-base">Dein nächstes Abenteuer im Blick. Hier findest du deine Reise, deine Vorbereitung und deine Ausgaben an einem Ort.</p>';
+    html += '</div><div class="hidden h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-white/90 bg-white/75 text-blue-600 shadow-sm sm:flex">' + icon("compass", "h-8 w-8") + '</div></div></section>';
+    if (!trip) return html + '<section class="rounded-[2rem] border border-blue-100 bg-gradient-to-br from-white to-sky-50 p-6 text-center shadow-sm"><div class="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-100 text-blue-700">' + icon("plane", "h-8 w-8") + '</div><h2 class="mt-4 text-xl font-bold text-slate-900">Dein nächstes Abenteuer wartet</h2><p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Lege deine erste Reise an und behalte Countdown, Packliste, To-dos und Urlaubskosten an einem Ort im Blick.</p><button type="button" data-action="navigate" data-page="trips" class="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700">' + icon("plus", "h-4 w-4") + ' Urlaub anlegen</button></section>';
+    const countdownTitle = tripInProgress ? "Du bist gerade unterwegs" : days === null ? "Reisedatum ansehen" : days < 0 ? "Diese Reise ist vorbei" : days === 0 ? "Heute geht's los!" : days === 1 ? "Noch 1 Tag bis zur Abreise" : "Noch " + days + " Tage bis zur Abreise";
+    const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
+    const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
+    html += '<section class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-700 via-blue-600 to-cyan-600 p-5 text-white shadow-lg shadow-blue-900/15 md:p-7">';
+    html += '<div class="pointer-events-none absolute -right-8 -top-10 h-48 w-48 rounded-full border border-white/10"></div><div class="pointer-events-none absolute -right-1 top-0 h-36 w-36 rounded-full border border-white/10"></div><div class="pointer-events-none absolute bottom-[-3rem] right-24 h-40 w-40 rounded-full bg-cyan-300/20 blur-2xl"></div>';
+    html += '<div class="relative grid gap-6 md:grid-cols-[1fr_auto] md:items-center"><div class="min-w-0">';
+    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/90">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
+    html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
+    html += '<p class="mt-2 flex items-center gap-2 text-sm text-white/85 md:text-base">' + icon("map-pin", "h-4 w-4 shrink-0") + ' ' + esc(trip.destination || "Ziel noch nicht eingetragen") + '</p>';
+    html += '<p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/75">' + icon("calendar-days", "h-4 w-4") + ' ' + shortDate(trip.startDate) + ' – ' + shortDate(trip.endDate) + '</p>';
+    html += '<div class="mt-5 flex flex-wrap gap-2"><button type="button" data-action="select-dashboard-trip" data-id="' + esc(trip.id) + '" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-50">' + icon("arrow-up-right", "h-4 w-4") + ' Reise öffnen</button>';
+    html += '<button type="button" data-action="navigate" data-page="trips" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20">' + icon("map", "h-4 w-4") + ' Alle Urlaube</button></div></div>';
+    html += '<div class="relative flex min-w-[150px] flex-col items-center justify-center rounded-[1.75rem] border border-white/20 bg-white/10 px-5 py-5 text-center backdrop-blur-sm md:min-w-[190px] md:py-7"><div class="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">' + icon(tripInProgress ? "sun" : "calendar-clock", "h-6 w-6") + '</div><div class="text-lg font-bold leading-tight">' + countdownNumber + '</div><div class="mt-1 text-xs leading-5 text-white/80">' + countdownSub + '</div><div class="sr-only">' + countdownTitle + '</div></div></div>';
+    html += '<div class="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"><div class="rounded-2xl border border-white/15 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/70">Bisher ausgegeben</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.total) + '</div></div>';
+    html += '<div class="rounded-2xl border border-white/15 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/70">Restbudget</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.remaining) + '</div></div>';
+    html += '<div class="col-span-2 rounded-2xl border border-white/15 bg-white/10 p-3.5 sm:col-span-1"><div class="flex items-center justify-between text-xs font-medium text-white/75"><span>Budget genutzt</span><span>' + budgetPct + '%</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-white/20"><div class="h-full rounded-full ' + (totalsData.remaining >= 0 ? "bg-emerald-300" : "bg-rose-300") + '" style="width:' + budgetPct + '%"></div></div></div></div></section>';
+    return html;
+  }
+
+  function dashboardProgressHTML(trip) {
+    if (!trip) return "";
+    const packDone = trip.packlist.filter(item => item.done).length;
+    const todoDone = trip.todos.filter(item => item.done).length;
+    const packPct = trip.packlist.length ? Math.round(packDone / trip.packlist.length * 100) : 0;
+    const todoPct = trip.todos.length ? Math.round(todoDone / trip.todos.length * 100) : 0;
+    let html = '<div class="grid gap-4 md:grid-cols-2">';
+    html += '<section class="rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-black/5 md:p-5"><div class="flex items-start gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">' + icon("luggage", "h-5 w-5") + '</div><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">Packliste</h2><p class="text-sm text-slate-500">Alles dabei?</p></div><div class="rounded-xl bg-blue-50 px-2.5 py-1.5 text-sm font-bold text-blue-700">' + packPct + '%</div></div>';
+    html += '<div class="mt-4 flex items-baseline gap-2"><span class="text-2xl font-bold text-slate-900">' + packDone + '</span><span class="text-sm text-slate-500">von ' + trip.packlist.length + ' erledigt</span></div><div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all" style="width:' + packPct + '%"></div></div>';
+    html += '<button type="button" data-action="open-dashboard-section" data-id="' + esc(trip.id) + '" data-page="more" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">' + icon("clipboard-list", "h-4 w-4") + ' Packliste öffnen ' + icon("arrow-right", "h-4 w-4") + '</button></section>';
+    html += '<section class="rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-black/5 md:p-5"><div class="flex items-start gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">' + icon("check-circle-2", "h-5 w-5") + '</div><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">To-dos</h2><p class="text-sm text-slate-500">Die nächsten Schritte</p></div><div class="rounded-xl bg-emerald-50 px-2.5 py-1.5 text-sm font-bold text-emerald-700">' + todoPct + '%</div></div>';
+    html += '<div class="mt-4 flex items-baseline gap-2"><span class="text-2xl font-bold text-slate-900">' + todoDone + '</span><span class="text-sm text-slate-500">von ' + trip.todos.length + ' erledigt</span></div><div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all" style="width:' + todoPct + '%"></div></div>';
+    html += '<button type="button" data-action="open-dashboard-section" data-id="' + esc(trip.id) + '" data-page="more" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100">' + icon("list-checks", "h-4 w-4") + ' To-dos öffnen ' + icon("arrow-right", "h-4 w-4") + '</button></section></div>';
+    return html;
+  }
+
   function overviewHTML() {
-    const trip = activeTrip();
-    const totalsData = totals();
-    const budgetPct = trip ? Math.round(Math.min(100, Math.max(0, (totalsData.total / Math.max(1, trip.budget)) * 100))) : 0;
-    const day = dayItems();
-    const dayTotal = day.reduce((s,e)=>s+Number(e.amount||0),0);
+    const active = activeTrip();
+    const today = iso();
+    const upcomingTrips = trips
+      .filter(item => String(item.endDate || item.startDate || "") >= today)
+      .sort((a,b) => String(a.startDate || "").localeCompare(String(b.startDate || "")));
+    const trip = upcomingTrips[0] || active;
+    const isUpcoming = upcomingTrips.length > 0;
+    const tripEntries = trip ? [...trip.expenses, ...trip.tolls] : [];
+    const spent = tripEntries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const totalsData = { total: spent, remaining: Number(trip?.budget || 0) - spent };
+    const budgetPct = trip ? Math.round(Math.min(100, Math.max(0, (spent / Math.max(1, trip.budget)) * 100))) : 0;
+    const day = tripEntries.filter(entry => entry.date === daySelected);
+    const dayTotal = day.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+    const days = trip ? daysUntil(trip.startDate) : null;
+    const tripInProgress = Boolean(trip?.startDate && trip?.endDate && trip.startDate <= today && trip.endDate >= today);
     return `<div class="space-y-6">
-      ${trip ? `<section class="rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl md:p-7">
-        <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div class="max-w-2xl pr-12 sm:pr-0">
-            <div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div>
-            <h1 class="text-3xl font-bold tracking-tight md:text-5xl">${esc(trip.name)}</h1>
-            <p class="mt-2 text-sm text-white/70 md:text-base">${esc(trip.destination || "Kein Ziel")} · ${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}</p>
-          </div>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[480px]">
-            ${statHTML("Urlaube", trips.length)}
-            ${statHTML("Ausgegeben", money(totalsData.total))}
-            ${statHTML("Restbudget", money(totalsData.remaining))}
-            ${statHTML("Personen", trip.people.length)}
-          </div>
-        </div>
-        <div class="mt-5">
-          <div class="mb-2 flex items-center justify-between text-sm text-white/70"><span>Budget-Verlauf</span><span>${budgetPct}%</span></div>
-          <div class="h-3 w-full overflow-hidden rounded-full bg-white/10"><div class="h-full rounded-full ${totalsData.remaining >= 0 ? "bg-emerald-400" : "bg-rose-400"}" style="width:${budgetPct}%"></div></div>
-        </div>
-      </section>` : topBarHTML("Übersicht", "Lege zuerst einen Urlaub an")}
+      ${dashboardHeroHTML(trip, totalsData, budgetPct, isUpcoming, days, tripInProgress)}
+
+      ${dashboardProgressHTML(trip)}
 
       ${!trip ? `<div class="rounded-3xl bg-white/90 p-6 text-center shadow-sm ring-1 ring-black/5"><div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">${icon("calendar-days","h-7 w-7")}</div><h2 class="mt-4 text-xl font-semibold">Noch kein Urlaub angelegt</h2><p class="mt-2 text-sm text-slate-500">Öffne „Urlaube“ unten und lege deine erste Reise an.</p></div>` : `
       ${(() => {
@@ -3737,6 +3778,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
+      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){activePage=el.dataset.page||"more";localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
