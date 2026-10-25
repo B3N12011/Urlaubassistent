@@ -332,6 +332,34 @@
       .ua-app-mark, .ua-offline-mark, .ua-loading-dots span, .ua-splash-logo-shell,
       .ua-loading-screen .ua-status-glow, .ua-splash-progress span { animation: none !important; }
     }
+
+    /* Authentication screen: app-matched navy hero and clean mobile-first form. */
+    .ua-auth-page {
+      background:
+        radial-gradient(ellipse at 8% 5%, rgba(219,234,254,.68) 0%, rgba(248,250,252,0) 36%),
+        linear-gradient(180deg, #f8fafc 0%, #ffffff 52%, #f1f5f9 100%);
+    }
+    .ua-auth-hero { isolation: isolate; animation: ua-auth-panel-in 440ms cubic-bezier(.18,.72,.25,1) both; }
+    .ua-auth-hero::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .14;
+      background-image: linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 34px 34px; mask-image: linear-gradient(to bottom right, black, transparent 82%);
+    }
+    .ua-auth-orbit { position: absolute; border: 1px solid rgba(255,255,255,.10); border-radius: 9999px; pointer-events: none; }
+    .ua-auth-card { position: relative; animation: ua-auth-panel-in 480ms cubic-bezier(.18,.72,.25,1) 65ms both; }
+    .ua-auth-tab { min-height: 46px; transition: background-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+    .ua-auth-tab:active { transform: scale(.985); }
+    .ua-auth-input { transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+    .ua-auth-input:focus-within { border-color: #64748b; box-shadow: 0 0 0 4px rgba(15,23,42,.07); background: #fff; }
+    .ua-auth-submit { min-height: 54px; transition: transform 180ms cubic-bezier(.2,.75,.25,1), background-color 180ms ease, box-shadow 180ms ease; box-shadow: 0 8px 18px rgba(15,23,42,.12); }
+    .ua-auth-submit:hover { box-shadow: 0 12px 24px rgba(15,23,42,.17); transform: translateY(-1px); }
+    .ua-auth-submit:active { transform: scale(.985); }
+    .ua-auth-check { accent-color: #0f172a; }
+    @keyframes ua-auth-panel-in { from { opacity: 0; transform: translate3d(0, 12px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-auth-hero, .ua-auth-card { animation: none !important; }
+      .ua-auth-tab, .ua-auth-input, .ua-auth-submit { transition: none !important; }
+    }
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
@@ -885,42 +913,101 @@
 
   function authHTML() {
     const signIn = authMode === "signin";
-    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 px-4 py-8 text-slate-900">
-      <div class="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div class="rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl md:p-8">
-          <div class="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div>
-          <h1 class="text-3xl font-bold tracking-tight md:text-5xl">Melde dich an und speichere all deine Urlaube an einem Ort.</h1>
-          <p class="mt-4 max-w-xl text-sm leading-6 text-white/75 md:text-base">Mit E-Mail und Passwort kannst du später deine Urlaube, Ausgaben und Listen an einem Ort behalten.</p>
-        </div>
-        <div class="rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-black/5 md:p-8">
-          <div class="flex gap-2 rounded-2xl bg-slate-100 p-1">
-            <button class="flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${signIn ? "bg-white shadow-sm" : "text-slate-500"}" data-action="auth-mode" data-mode="signin">Anmelden</button>
-            <button class="flex-1 rounded-2xl px-4 py-2 text-sm font-medium ${!signIn ? "bg-white shadow-sm" : "text-slate-500"}" data-action="auth-mode" data-mode="signup">Registrieren</button>
-          </div>
-          <div class="mt-6 space-y-3">
-            ${inputHTML("email", authEmail, "E-Mail", `id="auth-email"`)}
-            ${!signIn ? `<div class="text-xs leading-5 text-slate-500">Passwort muss mindestens 6 Zeichen haben und mindestens ein Sonderzeichen enthalten.</div>` : ""}
-            <div class="relative">
-              ${inputHTML(showAuthPassword ? "text" : "password", authPassword, "Passwort", `id="auth-password" class="pr-14"`)}
-              <button type="button" data-action="toggle-auth-password" class="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-600 hover:bg-slate-100">${icon(showAuthPassword ? "eye" : "eye-off", "h-4 w-4")}</button>
+    const title = signIn ? "Schön, dass du da bist." : "Dein nächstes Abenteuer beginnt hier.";
+    const description = signIn
+      ? "Melde dich an und mach direkt dort weiter, wo du bei deiner Urlaubsplanung aufgehört hast."
+      : "Erstelle dein Konto und plane Reisen, Ausgaben und Packlisten an einem Ort.";
+    const privacyDetails = privacyOpen ? `<div class="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700"><div class="mb-2 font-semibold text-slate-900">Datenschutz</div><div class="space-y-2 leading-6"><p><b>Gespeicherte Daten:</b> E-Mail, Urlaubsdaten, Personen, Ausgaben, Packliste und To-dos.</p><p><b>Zweck:</b> Anmeldung, Verwaltung und Speicherung deiner Urlaube.</p><p><b>Speicherdauer:</b> solange dein Konto besteht oder bis du die Löschung verlangst.</p><p><b>Deine Rechte:</b> Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch und Datenübertragbarkeit sowie das Recht auf Beschwerde bei einer Datenschutzaufsichtsbehörde.</p></div></div>` : "";
+
+    return `<div class="ua-auth-page min-h-screen px-4 pb-10 pt-7 text-slate-900 sm:pt-10">
+      <main class="mx-auto w-full max-w-lg">
+        <section class="ua-auth-hero relative overflow-hidden rounded-[2rem] bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/15 sm:p-8">
+          <div class="ua-auth-orbit -right-12 -top-14 h-56 w-56"></div>
+          <div class="ua-auth-orbit -right-1 -top-7 h-40 w-40"></div>
+          <div class="absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl"></div>
+          <div class="relative z-10">
+            <div class="flex items-center gap-3">
+              <img src="./icon-192.png" alt="Urlaubassistent" width="52" height="52" class="h-[52px] w-[52px] rounded-2xl shadow-lg shadow-black/20 ring-1 ring-white/15" />
+              <div class="min-w-0">
+                <div class="text-sm font-bold tracking-wide">Urlaubassistent</div>
+                <div class="mt-0.5 text-xs text-white/55">Dein Urlaub. Alles im Blick.</div>
+              </div>
             </div>
-            <label class="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 ring-1 ring-slate-200">
-              <input id="privacy-accepted" type="checkbox" ${privacyAccepted ? "checked" : ""} class="mt-1 h-4 w-4 rounded border-slate-300" />
-              <span>Ich akzeptiere die <button type="button" data-action="toggle-privacy" class="font-semibold text-slate-900 underline decoration-slate-400 underline-offset-2">Datenschutz</button>.</span>
-            </label>
-            <label class="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 ring-1 ring-slate-200">
-              <input id="age-confirmed" type="checkbox" ${ageConfirmed ? "checked" : ""} class="mt-1 h-4 w-4 rounded border-slate-300" />
-              <span>Ich bestätige, dass ich 18 Jahre oder älter bin.</span>
-            </label>
-            ${privacyOpen ? `<div class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700 ring-1 ring-slate-200"><div class="mb-2 font-semibold text-slate-900">Datenschutz</div><div class="space-y-2 leading-6"><p><b>Gespeicherte Daten:</b> E-Mail, Urlaubsdaten, Personen, Ausgaben, Packliste und To-dos.</p><p><b>Zweck:</b> Anmeldung, Verwaltung und Speicherung deiner Urlaube.</p><p><b>Speicherdauer:</b> solange dein Konto besteht oder bis du die Löschung verlangst.</p><p><b>Deine Rechte:</b> Auskunft, Berichtigung, Löschung, Einschränkung, Widerspruch und Datenübertragbarkeit sowie das Recht auf Beschwerde bei einer Datenschutzaufsichtsbehörde.</p></div></div>` : ""}
-            ${buttonHTML(signIn ? (authLoading ? "Bitte warten..." : "Anmelden") : (authLoading ? "Bitte warten..." : "Konto erstellen"), `data-action="submit-auth" ${authLoading ? "disabled" : ""}`, "default")}
-            ${signIn ? buttonHTML("Passwort vergessen?", `data-action="reset-password" ${authLoading ? "disabled" : ""}`, "soft") : ""}
-            ${authResetMessage ? `<div class="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-100">${esc(authResetMessage)}</div>` : ""}
-            ${authMessage ? `<div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(authMessage)}</div>` : ""}
-            <p class="text-xs leading-5 text-slate-500">Passwort zurücksetzen ist nur mit einer E-Mail möglich, die zu einem bestehenden Konto gehört.</p>
+            <div class="mt-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[.16em] text-slate-300">
+              ${icon("sparkles", "h-3.5 w-3.5")} ${signIn ? "Willkommen zurück" : "Ein guter Start"}
+            </div>
+            <h1 class="mt-4 max-w-sm text-[2rem] font-extrabold leading-[1.08] tracking-tight sm:text-4xl">${title}</h1>
+            <p class="mt-3 max-w-md text-sm leading-6 text-slate-300 sm:text-base">${description}</p>
+            <div class="mt-5 flex flex-wrap gap-2">
+              <span class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/80">${icon("map", "h-3.5 w-3.5")} Reisen</span>
+              <span class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/80">${icon("wallet-cards", "h-3.5 w-3.5")} Ausgaben</span>
+              <span class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/80">${icon("clipboard-list", "h-3.5 w-3.5")} Packliste</span>
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        <section class="ua-auth-card -mt-3 rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-xl shadow-slate-900/[0.07] sm:p-7">
+          <div class="flex gap-1.5 rounded-2xl bg-slate-100 p-1">
+            <button type="button" class="ua-auth-tab flex-1 rounded-xl px-4 py-2.5 text-sm font-bold ${signIn ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}" data-action="auth-mode" data-mode="signin" aria-pressed="${signIn}">Anmelden</button>
+            <button type="button" class="ua-auth-tab flex-1 rounded-xl px-4 py-2.5 text-sm font-bold ${!signIn ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:text-slate-900"}" data-action="auth-mode" data-mode="signup" aria-pressed="${!signIn}">Registrieren</button>
+          </div>
+
+          <div class="mb-5 mt-6">
+            <h2 class="text-xl font-bold tracking-tight text-slate-900">${signIn ? "Melde dich an" : "Konto erstellen"}</h2>
+            <p class="mt-1 text-sm leading-5 text-slate-500">${signIn ? "Schön, dass du wieder da bist." : "Dauert nur einen kurzen Moment."}</p>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label for="auth-email" class="mb-2 block text-sm font-semibold text-slate-700">E-Mail-Adresse</label>
+              <div class="ua-auth-input relative flex items-center rounded-2xl border border-slate-200 bg-slate-50/70">
+                <span class="pointer-events-none absolute left-4 flex items-center text-slate-400">${icon("mail", "h-5 w-5")}</span>
+                ${inputHTML("email", authEmail, "name@beispiel.de", `id="auth-email" autocomplete="email" class="h-14 w-full rounded-2xl border-0 bg-transparent pl-12 pr-4 text-base outline-none ring-0 focus:border-transparent focus:ring-0"`)}
+              </div>
+            </div>
+
+            <div>
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <label for="auth-password" class="block text-sm font-semibold text-slate-700">Passwort</label>
+                ${signIn ? `<span class="text-xs text-slate-400">Willkommen zurück</span>` : ""}
+              </div>
+              <div class="ua-auth-input relative flex items-center rounded-2xl border border-slate-200 bg-slate-50/70">
+                <span class="pointer-events-none absolute left-4 flex items-center text-slate-400">${icon("lock-keyhole", "h-5 w-5")}</span>
+                ${inputHTML(showAuthPassword ? "text" : "password", authPassword, "Dein Passwort", `id="auth-password" autocomplete="${signIn ? "current-password" : "new-password"}" class="h-14 w-full rounded-2xl border-0 bg-transparent pl-12 pr-14 text-base outline-none ring-0 focus:border-transparent focus:ring-0"`)}
+                <button type="button" data-action="toggle-auth-password" aria-label="${showAuthPassword ? "Passwort verbergen" : "Passwort anzeigen"}" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">${icon(showAuthPassword ? "eye" : "eye-off", "h-5 w-5")}</button>
+              </div>
+              ${!signIn ? `<p class="mt-2 text-xs leading-5 text-slate-500">Verwende mindestens 6 Zeichen und ein Sonderzeichen für dein Passwort.</p>` : ""}
+            </div>
+
+            <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 text-sm leading-5 text-slate-600">
+              <input id="privacy-accepted" type="checkbox" ${privacyAccepted ? "checked" : ""} class="ua-auth-check mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300" />
+              <span>Ich akzeptiere die <button type="button" data-action="toggle-privacy" class="font-semibold text-slate-900 underline decoration-slate-400 underline-offset-2">Datenschutzinformationen</button>.</span>
+            </label>
+
+            ${!signIn ? `<label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 text-sm leading-5 text-slate-600">
+              <input id="age-confirmed" type="checkbox" ${ageConfirmed ? "checked" : ""} class="ua-auth-check mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300" />
+              <span>Ich bestätige, dass ich 18 Jahre oder älter bin.</span>
+            </label>` : ""}
+
+            ${privacyDetails}
+
+            <button type="button" data-action="submit-auth" ${authLoading ? "disabled" : ""} class="ua-auth-submit inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-4 text-base font-bold text-white disabled:cursor-not-allowed disabled:opacity-60">
+              ${authLoading ? icon("loader-circle", "h-5 w-5 animate-spin") : icon(signIn ? "log-in" : "user-round-plus", "h-5 w-5")}
+              ${authLoading ? "Bitte warten …" : signIn ? "Anmelden" : "Konto erstellen"}
+            </button>
+
+            ${signIn ? `<div class="text-center">${buttonHTML("Passwort vergessen?", `data-action="reset-password" ${authLoading ? "disabled" : ""}`, "ghost")}</div>` : ""}
+
+            ${authResetMessage ? `<div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-5 text-amber-800">${esc(authResetMessage)}</div>` : ""}
+            ${authMessage ? `<div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-5 text-slate-700">${icon("info", "mr-1 inline h-4 w-4")} ${esc(authMessage)}</div>` : ""}
+          </div>
+
+          <div class="mt-5 flex items-center justify-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-400">
+            ${icon("shield-check", "h-4 w-4")} Deine Reiseplanung an einem Ort.
+          </div>
+        </section>
+        <p class="mx-auto mt-5 max-w-sm text-center text-[11px] leading-5 text-slate-400">Mit deinem Konto kannst du deine Urlaube, Ausgaben und Listen an einem Ort verwalten.</p>
+      </main>
     </div>`;
   }
 
@@ -4077,7 +4164,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=33").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=34").catch(() => {});
     }, { once: true });
   }
 
