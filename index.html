@@ -517,6 +517,8 @@
   let joinMessage = "";
   let family = null;
   let familyMembers = [];
+  let familyInvites = [];
+  let familySharedTripMemberIds = new Map();
   let familyLoading = false;
   let familySaving = false;
   let familyInviteLoading = false;
@@ -2906,6 +2908,8 @@
     if (!session?.user?.id) {
       family = null;
       familyMembers = [];
+      familyInvites = [];
+      familySharedTripMemberIds = new Map();
       familyRenameOpen = false;
       familyRenameName = "";
       familyLoading = false;
@@ -2924,6 +2928,8 @@
       if (!membershipResult.data) {
         family = null;
         familyMembers = [];
+        familyInvites = [];
+        familySharedTripMemberIds = new Map();
         familyRenameOpen = false;
         familyRenameName = "";
         familySharedTripIds = new Set();
@@ -2953,12 +2959,23 @@
       familyMembers = membersResult.data || [];
       familyError = "";
       await refreshFamilySharedTripStatus();
+      await loadFamilyInvites();
     } catch (e) {
       console.error("Family laden fehlgeschlagen:", e);
       familyError = friendlyAppError(e, "Laden der Family-Daten");
     } finally {
       familyLoading = false;
     }
+  }
+
+  async function loadFamilyInvites() {
+    if (!family?.id || family.owner_user_id !== session?.user?.id) {
+      familyInvites = [];
+      return;
+    }
+    const result = await supabase.rpc("list_family_invites", { p_family_id: family.id });
+    if (result.error) throw result.error;
+    familyInvites = result.data || [];
   }
 
   async function createFamily() {
@@ -3012,6 +3029,52 @@
     }
   }
 
+  async function revokeFamilyInvite(inviteId) {
+    if (!family?.id || family.owner_user_id !== session?.user?.id || familySaving) return;
+    familySaving = true; familyError = ""; familyMessage = ""; render();
+    try {
+      const invite = familyInvites.find(item => item.id === inviteId);
+      const result = await supabase.rpc("revoke_family_invite", { p_invite_id: inviteId });
+      if (result.error) throw result.error;
+      if (invite && familyInviteCode && formatFamilyInviteCode(familyInviteCode) === formatFamilyInviteCode(invite.code)) familyInviteCode = "";
+      await loadFamilyInvites();
+      familyMessage = "Der Einladungscode wurde widerrufen.";
+    } catch (e) {
+      console.error("Einladungscode widerrufen fehlgeschlagen:", e);
+      familyError = friendlyAppError(e, "Widerrufen des Einladungscodes");
+    } finally { familySaving = false; render(); }
+  }
+
+  async function removeFamilyMember(memberId) {
+    if (!family?.id || family.owner_user_id !== session?.user?.id || familySaving) return;
+    familySaving = true; familyError = ""; familyMessage = ""; render();
+    try {
+      const result = await supabase.rpc("remove_family_member", { p_member_id: memberId });
+      if (result.error) throw result.error;
+      await loadFamily();
+      familyMessage = "Das Familienmitglied wurde entfernt. Frühere Urlaubsfreigaben bleiben bestehen und können separat verwaltet werden.";
+    } catch (e) {
+      console.error("Family-Mitglied entfernen fehlgeschlagen:", e);
+      familyError = friendlyAppError(e, "Entfernen des Familienmitglieds");
+    } finally { familySaving = false; render(); }
+  }
+
+  async function leaveFamily() {
+    if (!family?.id || family.owner_user_id === session?.user?.id || familySaving) return;
+    familySaving = true; familyError = ""; familyMessage = ""; render();
+    try {
+      const result = await supabase.rpc("leave_family");
+      if (result.error) throw result.error;
+      family = null; familyMembers = []; familyInvites = []; familyInviteCode = "";
+      familySharedTripIds = new Set(); familySharedTripMemberIds = new Map();
+      familyRenameOpen = false; familyRenameName = "";
+      familyMessage = "Du hast die Family verlassen. Frühere Urlaubsfreigaben bleiben bestehen.";
+    } catch (e) {
+      console.error("Family verlassen fehlgeschlagen:", e);
+      familyError = friendlyAppError(e, "Verlassen der Family");
+    } finally { familySaving = false; render(); }
+  }
+
   async function createFamilyInvite() {
     if (!family?.id || family.owner_user_id !== session?.user?.id) {
       familyError = "Nur die Familienadministration kann Einladungen erstellen.";
@@ -3041,6 +3104,7 @@
       }
       if (!createdCode) throw new Error("Es konnte kein eindeutiger Einladungscode erstellt werden.");
       familyInviteCode = createdCode;
+      await loadFamilyInvites();
       familyMessage = "Einladungscode erstellt. Er ist 7 Tage gültig und kann einmal verwendet werden.";
     } catch (e) {
       console.error("Family-Einladung erstellen fehlgeschlagen:", e);
@@ -3092,38 +3156,30 @@
 
   async function refreshFamilySharedTripStatus() {
     familySharedTripIds = new Set();
+    familySharedTripMemberIds = new Map();
     if (!family?.id || !session?.user?.id || !familyMembers.length) return;
 
     const familyUserIds = [...new Set(familyMembers.map(member => member.user_id).filter(Boolean))];
     const otherFamilyUserIds = familyUserIds.filter(userId => userId !== session.user.id);
     const ownedTripIds = trips.filter(trip => trip.role === "owner").map(trip => trip.id);
-
-    // Sharing one’s own trips only becomes meaningful when another family member exists.
     if (!otherFamilyUserIds.length || !ownedTripIds.length) return;
 
     try {
-      const result = await supabase
-        .from("trip_members")
-        .select("trip_id, user_id")
-        .in("trip_id", ownedTripIds)
-        .in("user_id", familyUserIds);
+      const result = await supabase.from("trip_members").select("trip_id, user_id")
+        .in("trip_id", ownedTripIds).in("user_id", otherFamilyUserIds);
       if (result.error) throw result.error;
 
       const membersByTrip = new Map();
       (result.data || []).forEach(row => {
         const ids = membersByTrip.get(row.trip_id) || new Set();
-        ids.add(row.user_id);
-        membersByTrip.set(row.trip_id, ids);
+        ids.add(row.user_id); membersByTrip.set(row.trip_id, ids);
       });
-
-      const sharedIds = new Set();
       ownedTripIds.forEach(tripId => {
         const included = membersByTrip.get(tripId) || new Set();
-        if (familyUserIds.every(userId => included.has(userId))) sharedIds.add(tripId);
+        familySharedTripMemberIds.set(tripId, included);
+        if (otherFamilyUserIds.every(userId => included.has(userId))) familySharedTripIds.add(tripId);
       });
-      familySharedTripIds = sharedIds;
     } catch (e) {
-      // The share action itself remains available; it is safe to retry because the RPC is idempotent.
       console.warn("Family-Urlaubsfreigaben konnten nicht geprüft werden:", e);
     }
   }
@@ -3228,7 +3284,9 @@
 
       family = null;
       familyMembers = [];
+      familyInvites = [];
       familyInviteCode = "";
+      familySharedTripMemberIds = new Map();
       familyRenameOpen = false;
       familyNameInput = "";
       familySharedTripIds = new Set();
@@ -3274,9 +3332,10 @@
     }
   }
 
-  async function copyFamilyInviteCode() {
-    if (!familyInviteCode) return;
-    const formatted = formatFamilyInviteCode(familyInviteCode);
+  async function copyFamilyInviteCode(codeOverride = "") {
+    const rawCode = codeOverride || familyInviteCode;
+    if (!rawCode) return;
+    const formatted = formatFamilyInviteCode(rawCode);
     try {
       await navigator.clipboard.writeText(formatted);
       familyMessage = "Einladungscode wurde kopiert.";
@@ -3291,7 +3350,7 @@
     const currentUserId = session?.user?.id;
     const isOwner = Boolean(family && family.owner_user_id === currentUserId);
     const familyStatus = familyMessage
-      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl ${familyMessage.startsWith("Automatisches Teilen ist aktiviert") || familyMessage.startsWith("Deine Family ist erstellt") || familyMessage.startsWith("Du bist der Family") || familyMessage.includes("kopiert") || familyMessage.includes("gespeichert") || familyMessage.includes("gelöscht") ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-800 ring-1 ring-slate-200"} px-3 py-3 text-sm">${icon("check-circle-2","h-4 w-4 shrink-0 mt-0.5")}${esc(familyMessage)}</div>`
+      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl ${familyMessage.startsWith("Automatisches Teilen ist aktiviert") || familyMessage.startsWith("Deine Family ist erstellt") || familyMessage.startsWith("Du bist der Family") || familyMessage.includes("kopiert") || familyMessage.includes("gespeichert") || familyMessage.includes("gelöscht") || familyMessage.includes("widerrufen") || familyMessage.includes("entfernt") || familyMessage.includes("verlassen") ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-800 ring-1 ring-slate-200"} px-3 py-3 text-sm">${icon("check-circle-2","h-4 w-4 shrink-0 mt-0.5")}${esc(familyMessage)}</div>`
       : "";
     const familyProblem = familyError
       ? `<div class="mt-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${icon("alert-circle","h-4 w-4 shrink-0 mt-0.5")}${esc(familyError)}</div>`
@@ -4203,6 +4262,42 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
       if(action==="copy-share-code"){try{await navigator.clipboard.writeText(shareCode);}catch{}return;}
       if(action==="open-join"){joinDialogOpen=true;joinMessage="";joinCode="";render();return;}
       if(action==="close-join"){joinDialogOpen=false;joinMessage="";joinCode="";render();return;}
+      if(action==="remove-family-member"){
+        const member = familyMembers.find(item => item.id === el.dataset.memberId);
+        if(member && family?.owner_user_id === session?.user?.id && member.role !== "owner"){
+          deleteDialog = {
+            label: "Familienmitglied entfernen",
+            description: "Soll " + (member.display_name || "dieses Familienmitglied") + " wirklich aus der Family entfernt werden? Bereits einzeln geteilte Urlaube bleiben für diese Person weiterhin freigegeben.",
+            onConfirm: () => removeFamilyMember(member.id)
+          };
+          render();
+        }
+        return;
+      }
+      if(action==="leave-family"){
+        if(family && family.owner_user_id !== session?.user?.id){
+          deleteDialog = {
+            label: "Family verlassen",
+            description: "Du wirst aus dieser Family entfernt. Urlaube, die vorher einzeln mit dir geteilt wurden, bleiben weiterhin in deinem Zugriff.",
+            onConfirm: () => leaveFamily()
+          };
+          render();
+        }
+        return;
+      }
+      if(action==="revoke-family-invite"){
+        const invite = familyInvites.find(item => item.id === el.dataset.id);
+        if(invite && family?.owner_user_id === session?.user?.id && invite.active && !invite.used_at && Date.parse(invite.expires_at) > Date.now()){
+          deleteDialog = {
+            label: "Einladungscode widerrufen",
+            description: "Der Code " + formatFamilyInviteCode(invite.code) + " wird sofort ungültig. Wer ihn noch nicht verwendet hat, kann damit nicht mehr beitreten.",
+            onConfirm: () => revokeFamilyInvite(invite.id)
+          };
+          render();
+        }
+        return;
+      }
+      if(action==="copy-family-code"){await copyFamilyInviteCode(el.dataset.code || "");return;}
       if(action==="edit-family-name"){familyRenameName=family?.name||"";familyRenameOpen=true;familyError="";familyMessage="";render();setTimeout(()=>document.getElementById("family-rename-name")?.focus(),40);return;}
       if(action==="cancel-family-rename"){familyRenameOpen=false;familyRenameName=family?.name||"";familyError="";render();return;}
       if(action==="save-family-name"){await saveFamilyName();return;}
@@ -4402,7 +4497,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=42").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=43").catch(() => {});
     }, { once: true });
   }
 
