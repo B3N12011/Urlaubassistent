@@ -572,6 +572,16 @@
       .replaceAll("'", "&#039;");
   }
 
+  function newPasswordValidationError(value) {
+    const password = String(value || "");
+    if (password.length < 8) return "Verwende mindestens 8 Zeichen.";
+    if (!/[a-z]/.test(password)) return "Füge mindestens einen Kleinbuchstaben hinzu.";
+    if (!/[A-Z]/.test(password)) return "Füge mindestens einen Großbuchstaben hinzu.";
+    if (!/[0-9]/.test(password)) return "Füge mindestens eine Zahl hinzu.";
+    if (!/[^A-Za-z0-9]/.test(password)) return "Füge mindestens ein Sonderzeichen hinzu.";
+    return "";
+  }
+
   function friendlyAppError(err, operation = "Speichern") {
     const message = String(err?.message || (typeof err === "string" ? err : "")).trim();
     const lower = message.toLowerCase();
@@ -1017,7 +1027,7 @@
                 ${inputHTML(showAuthPassword ? "text" : "password", authPassword, "Dein Passwort", `id="auth-password" autocomplete="${signIn ? "current-password" : "new-password"}" class="h-14 w-full rounded-2xl border-0 bg-transparent pl-12 pr-14 text-base outline-none ring-0 focus:border-transparent focus:ring-0"`)}
                 <button type="button" data-action="toggle-auth-password" aria-label="${showAuthPassword ? "Passwort verbergen" : "Passwort anzeigen"}" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">${icon(showAuthPassword ? "eye" : "eye-off", "h-5 w-5")}</button>
               </div>
-              ${!signIn ? `<p class="mt-2 text-xs leading-5 text-slate-500">Verwende mindestens 6 Zeichen und ein Sonderzeichen für dein Passwort.</p>` : ""}
+              ${!signIn ? `<p class="mt-2 text-xs leading-5 text-slate-500">Verwende mindestens 8 Zeichen mit Groß- und Kleinbuchstaben, einer Zahl und einem Sonderzeichen.</p>` : ""}
             </div>
 
             <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 text-sm leading-5 text-slate-600">
@@ -3780,8 +3790,13 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
     try{
       if(!privacyAccepted)throw new Error("Bitte die Datenschutz-Checkbox aktivieren.");
       if(authMode==="signup"&&!ageConfirmed)throw new Error("Bitte bestätigen, dass du 18 Jahre oder älter bist.");
-      if(!authEmail.trim()||authPassword.length<6)throw new Error("Bitte E-Mail und ein Passwort mit mindestens 6 Zeichen eingeben.");
-      const result=authMode==="signup"?await supabase.auth.signUp({email:authEmail.trim(),password:authPassword,options:{emailRedirectTo:"https://urlaub-assistent.netlify.app/"}}):await supabase.auth.signInWithPassword({email:authEmail.trim(),password:authPassword});
+      if(!authEmail.trim()||!authPassword)throw new Error("Bitte gib E-Mail-Adresse und Passwort ein.");
+      if(authMode==="signin"&&authPassword.length<6)throw new Error("Bitte gib dein Passwort vollständig ein.");
+      if(authMode==="signup"){
+        const passwordProblem = newPasswordValidationError(authPassword);
+        if(passwordProblem)throw new Error("Passwort zu schwach: " + passwordProblem);
+      }
+      const result=authMode==="signup"?await supabase.auth.signUp({email:authEmail.trim(),password:authPassword,options:{emailRedirectTo:window.location.origin+window.location.pathname}}):await supabase.auth.signInWithPassword({email:authEmail.trim(),password:authPassword});
       if(result.error)throw result.error;
       if(result.data.session){session=result.data.session;acceptedCookies=true;await loadTrips();}else if(authMode==="signup"){authMessage="Konto erstellt. Bitte ggf. E-Mail bestätigen.";}
     }catch(e){
@@ -3802,7 +3817,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   async function updatePassword(){
     recoveryLoading=true;recoveryMessage="";render();
-    try{if(recoveryPassword.length<6)throw new Error("Passwort muss mindestens 6 Zeichen haben.");if(recoveryPassword!==recoveryPassword2)throw new Error("Die Passwörter stimmen nicht überein.");const {error:e}=await supabase.auth.updateUser({password:recoveryPassword});if(e)throw e;recoveryMessage="Passwort wurde geändert.";recovery=false;await supabase.auth.getSession();}catch(e){console.error("Passwort ändern fehlgeschlagen:",e);recoveryMessage=friendlyAppError(e,"Ändern des Passworts");}finally{recoveryLoading=false;render();}
+    try{const passwordProblem=newPasswordValidationError(recoveryPassword);if(passwordProblem)throw new Error("Passwort zu schwach: "+passwordProblem);if(recoveryPassword!==recoveryPassword2)throw new Error("Die Passwörter stimmen nicht überein.");const {error:e}=await supabase.auth.updateUser({password:recoveryPassword});if(e)throw e;recoveryMessage="Passwort wurde geändert.";recovery=false;await supabase.auth.getSession();}catch(e){console.error("Passwort ändern fehlgeschlagen:",e);recoveryMessage=friendlyAppError(e,"Ändern des Passworts");}finally{recoveryLoading=false;render();}
   }
 
   function openCustomExpenseCategoryDialog(category) {
@@ -4135,7 +4150,8 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
         return;
       }
       if(action==="save-settings-password"){
-        if(settingsPassword.length<6){settingsMessage="Passwort muss mindestens 6 Zeichen haben.";render();return;}
+        const passwordProblem = newPasswordValidationError(settingsPassword);
+        if(passwordProblem){settingsMessage="Passwort zu schwach: "+passwordProblem;render();return;}
         if(settingsPassword!==settingsPassword2){settingsMessage="Passwörter stimmen nicht überein.";render();return;}
         try{
           const {error:e}=await supabase.auth.updateUser({password:settingsPassword});
@@ -4358,7 +4374,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=40").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=41").catch(() => {});
     }, { once: true });
   }
 
