@@ -2321,7 +2321,7 @@
         <div class="flex items-center justify-between gap-3"><div><div class="text-sm font-semibold">Budget & Fortschritt</div><div class="mt-0.5 text-xs text-white/60">Persönliches Budget im Blick behalten</div></div><div class="text-sm font-semibold">${Math.round(ownBudgetPercent)}%</div></div>
         <div class="mt-4 space-y-3">
           <div><div class="mb-1.5 flex items-center justify-between text-xs text-white/65"><span>Am Gesamturlaubsbudget</span><span>${tripBudgetPercent.toFixed(0)}%</span></div><div class="h-2.5 overflow-hidden rounded-full bg-white/10"><div class="h-full rounded-full ${totals().remaining >= 0 ? "bg-emerald-400" : "bg-rose-400"}" style="width:${tripBudgetPercent}%"></div></div></div>
-          <div><div class="mb-1.5 flex items-center justify-between text-xs text-white/65"><span>Vom eigenen Budget</span><span>${ownBudgetPercent.toFixed(0)}%</span></div><div class="h-2.5 overflow-hidden rounded-full bg-white/10"><div class="h-full rounded-full bg-cyan-400" style="width:${ownBudgetPercent}%"></div></div></div>
+          <div><div class="mb-1.5 flex items-center justify-between text-xs text-white/65"><span>Vom eigenen Budget</span><span>${ownBudgetPercent.toFixed(0)}%</span></div><div class="h-2.5 overflow-hidden rounded-full bg-white/10"><div class="h-full rounded-full bg-white/80" style="width:${ownBudgetPercent}%"></div></div></div>
         </div>
         <div class="mt-4 flex flex-wrap items-center justify-between gap-3"><div class="text-sm text-white/70">Noch übrig: <span class="font-semibold text-white">${money(remaining)}</span></div><div class="flex w-full gap-2 sm:w-auto">${inputHTML("number", personBudgetInput, "Budget setzen", `id="person-budget" ${readonlyIfViewer()} class="person-dark-input sm:w-40"`)}${buttonHTML("Speichern",`data-action="save-person-budget" ${disabledIfViewer()}`)}</div></div>
       </div>
@@ -4077,7 +4077,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=32").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=33").catch(() => {});
     }, { once: true });
   }
 
