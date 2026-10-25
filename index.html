@@ -6,7 +6,7 @@
   <title>Urlaubassistent</title>
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <meta name="theme-color" content="#0F172A" />
+  <meta name="theme-color" content="#F5FAFF" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -231,7 +231,7 @@
     }
 </style>
 </head>
-<body class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900">
+<body class="min-h-screen bg-gradient-to-b from-sky-50 via-white to-blue-50 text-slate-900">
 
 <div id="root">
   <div class="ua-status-screen" role="status" aria-label="Urlaubassistent wird geladen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:24px;text-align:center;color:#0f172a;background:radial-gradient(ellipse at 50% 42%,#dbeafe 0%,#f8fafc 62%,#f8fafc 100%);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
@@ -703,7 +703,7 @@
     return `<section class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-black/5 backdrop-blur md:p-5">
       <div class="mb-4 flex items-start justify-between gap-4">
         <div class="flex items-start gap-3">
-          <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">${icon(iconName, "h-5 w-5")}</div>
+          <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">${icon(iconName, "h-5 w-5")}</div>
           <div>
             <h2 class="text-lg font-semibold text-slate-900">${esc(title)}</h2>
             ${subtitle ? `<p class="text-sm text-slate-500">${esc(subtitle)}</p>` : ""}
@@ -841,60 +841,55 @@
 
   function navItemHTML(page, iconName, label) {
     const active = activePage === page;
-    return `<button type="button" data-action="navigate" data-page="${page}" class="group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 transition ${active ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"}">
-      <span class="flex h-9 w-9 items-center justify-center rounded-xl ${active ? "bg-white/10" : "bg-transparent"}">${icon(iconName, "h-5 w-5")}</span>
-      <span class="text-[11px] font-semibold leading-none">${label}</span>
-    </button>`;
+    return '<button type="button" data-action="navigate" data-page="' + page + '" class="group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 transition ' + (active ? "bg-sky-100 text-sky-800 ring-1 ring-sky-200/70 shadow-sm" : "text-slate-500 hover:bg-white/70 hover:text-sky-700") + '">' +
+      '<span class="flex h-9 w-9 items-center justify-center rounded-xl ' + (active ? "bg-white text-sky-700 shadow-sm" : "bg-transparent") + '">' + icon(iconName, "h-5 w-5") + '</span>' +
+      '<span class="text-[11px] font-semibold leading-none">' + label + '</span></button>';
   }
 
   function topBarHTML(title, subtitle) {
     const trip = activeTrip();
-    return `<div class="mb-6 rounded-[2rem] bg-slate-900 p-4 text-white shadow-xl md:p-5">
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0 pr-12 sm:pr-0">
-          <div class="mb-1 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
-            ${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent
-          </div>
-          <h1 class="truncate text-2xl font-bold tracking-tight md:text-3xl">${esc(title)}</h1>
-          <p class="mt-1 text-sm text-white/65">${esc(subtitle)}</p>
-        </div>
-        <div class="hidden shrink-0 rounded-2xl bg-white/10 px-3 py-2 text-right text-xs text-white/70 sm:block">
-          <div>Ausgaben</div>
-          <div class="mt-0.5 text-sm font-semibold text-white">${money(totals().total)}</div>
-        </div>
-      </div>
-      ${trip ? `<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-white/10 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold">${esc(trip.name)}</div><div class="truncate text-xs text-white/60">${esc(trip.destination || "Kein Ziel")}</div></div><div class="shrink-0 text-right"><div class="text-xs text-white/50">Restbudget</div><div class="text-sm font-semibold">${money(totals().remaining)}</div></div></div>` : ""}
-    </div>`;
+    return '<div class="mb-6 rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-teal-50 p-4 text-slate-900 shadow-sm md:p-5">' +
+      '<div class="flex items-center justify-between gap-4"><div class="min-w-0 pr-12 sm:pr-0">' +
+      '<div class="mb-1 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/85 px-3 py-1 text-xs font-semibold text-sky-700">' + icon("sparkles", "h-3.5 w-3.5") + ' Urlaubassistent</div>' +
+      '<h1 class="truncate text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">' + esc(title) + '</h1>' +
+      '<p class="mt-1 text-sm text-slate-600">' + esc(subtitle) + '</p></div>' +
+      '<div class="hidden shrink-0 rounded-2xl border border-white bg-white/80 px-3 py-2 text-right text-xs text-slate-500 shadow-sm sm:block"><div>Ausgaben</div><div class="mt-0.5 text-sm font-semibold text-slate-800">' + money(totals().total) + '</div></div></div>' +
+      (trip ? '<div class="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-white/90 bg-white/75 p-3"><div class="min-w-0"><div class="truncate text-sm font-semibold text-slate-800">' + esc(trip.name) + '</div><div class="truncate text-xs text-slate-500">' + esc(trip.destination || "Kein Ziel") + '</div></div><div class="shrink-0 text-right"><div class="text-xs text-slate-500">Restbudget</div><div class="text-sm font-semibold text-teal-700">' + money(totals().remaining) + '</div></div></div>' : '') +
+      '</div>';
   }
 
   function dashboardHeroHTML(trip, totalsData, budgetPct, isUpcoming, days, tripInProgress) {
     const hour = new Date().getHours();
     const greeting = hour < 11 ? "Guten Morgen" : hour < 18 ? "Hallo" : "Guten Abend";
     const name = actorName();
-    let html = '<section class="relative overflow-hidden rounded-[2rem] border border-blue-100 bg-gradient-to-br from-white via-sky-50 to-blue-100 p-5 shadow-sm md:p-7">';
-    html += '<div class="pointer-events-none absolute -right-10 -top-12 h-48 w-48 rounded-full bg-blue-200/40 blur-3xl"></div>';
+    let html = '<section class="relative overflow-hidden rounded-[2rem] border border-sky-100 bg-gradient-to-br from-white via-sky-50/70 to-teal-50/70 p-5 shadow-sm md:p-7">';
+    html += '<div class="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-sky-100/60 blur-3xl"></div>';
     html += '<div class="relative flex items-start justify-between gap-4"><div class="min-w-0">';
-    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3 py-1.5 text-xs font-semibold text-blue-700 shadow-sm">' + icon("sparkles", "h-3.5 w-3.5") + ' DEIN REISE-ASSISTENT</div>';
+    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/90 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm">' + icon("sparkles", "h-3.5 w-3.5") + ' DEIN REISE-ASSISTENT</div>';
     html += '<h1 class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">' + greeting + ', ' + esc(name) + '!</h1>';
     html += '<p class="mt-2 max-w-xl text-sm leading-6 text-slate-600 md:text-base">Dein nächstes Abenteuer im Blick. Hier findest du deine Reise, deine Vorbereitung und deine Ausgaben an einem Ort.</p>';
-    html += '</div><div class="hidden h-16 w-16 shrink-0 items-center justify-center rounded-3xl border border-white/90 bg-white/75 text-blue-600 shadow-sm sm:flex">' + icon("compass", "h-8 w-8") + '</div></div></section>';
-    if (!trip) return html;
-    const countdownTitle = tripInProgress ? "Du bist gerade unterwegs" : days === null ? "Reisedatum ansehen" : days < 0 ? "Diese Reise ist vorbei" : days === 0 ? "Heute geht's los!" : days === 1 ? "Noch 1 Tag bis zur Abreise" : "Noch " + days + " Tage bis zur Abreise";
-    const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
+    html += '</div><div class="hidden h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white bg-white/90 text-sky-600 shadow-sm sm:flex">' + icon("compass", "h-7 w-7") + '</div></div></section>';
+    if (!trip) {
+      html += '<section class="rounded-[2rem] border border-sky-100 bg-white p-6 text-center shadow-sm md:p-8"><div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-50 text-sky-600">' + icon("plane", "h-7 w-7") + '</div><h2 class="mt-4 text-xl font-bold text-slate-900">Dein nächstes Abenteuer wartet</h2><p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Lege deine erste Reise an und behalte Countdown, Packliste, To-dos und Urlaubskosten an einem Ort im Blick.</p><button type="button" data-action="navigate" data-page="trips" class="mt-5 inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700">' + icon("plus", "h-4 w-4") + ' Urlaub anlegen</button></section>';
+      return html;
+    }
+    const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Reise vorbei";
     const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
-    html += '<section class="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-700 via-blue-600 to-cyan-600 p-5 text-white shadow-lg shadow-blue-900/15 md:p-7">';
-    html += '<div class="pointer-events-none absolute -right-8 -top-10 h-48 w-48 rounded-full border border-white/10"></div><div class="pointer-events-none absolute -right-1 top-0 h-36 w-36 rounded-full border border-white/10"></div><div class="pointer-events-none absolute bottom-[-3rem] right-24 h-40 w-40 rounded-full bg-cyan-300/20 blur-2xl"></div>';
-    html += '<div class="relative grid gap-6 md:grid-cols-[1fr_auto] md:items-center"><div class="min-w-0">';
-    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/90">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
-    html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
-    html += '<p class="mt-2 flex items-center gap-2 text-sm text-white/85 md:text-base">' + icon("map-pin", "h-4 w-4 shrink-0") + ' ' + esc(trip.destination || "Ziel noch nicht eingetragen") + '</p>';
-    html += '<p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/75">' + icon("calendar-days", "h-4 w-4") + ' ' + shortDate(trip.startDate) + ' – ' + shortDate(trip.endDate) + '</p>';
-    html += '<div class="mt-5 flex flex-wrap gap-2"><button type="button" data-action="select-dashboard-trip" data-id="' + esc(trip.id) + '" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-50">' + icon("arrow-up-right", "h-4 w-4") + ' Reise öffnen</button>';
-    html += '<button type="button" data-action="navigate" data-page="trips" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20">' + icon("map", "h-4 w-4") + ' Alle Urlaube</button></div></div>';
-    html += '<div class="relative flex min-w-[150px] flex-col items-center justify-center rounded-[1.75rem] border border-white/20 bg-white/10 px-5 py-5 text-center backdrop-blur-sm md:min-w-[190px] md:py-7"><div class="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15">' + icon(tripInProgress ? "sun" : "calendar-clock", "h-6 w-6") + '</div><div class="text-lg font-bold leading-tight">' + countdownNumber + '</div><div class="mt-1 text-xs leading-5 text-white/80">' + countdownSub + '</div><div class="sr-only">' + countdownTitle + '</div></div></div>';
-    html += '<div class="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"><div class="rounded-2xl border border-white/15 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/70">Bisher ausgegeben</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.total) + '</div></div>';
-    html += '<div class="rounded-2xl border border-white/15 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/70">Restbudget</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.remaining) + '</div></div>';
-    html += '<div class="col-span-2 rounded-2xl border border-white/15 bg-white/10 p-3.5 sm:col-span-1"><div class="flex items-center justify-between text-xs font-medium text-white/75"><span>Budget genutzt</span><span>' + budgetPct + '%</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-white/20"><div class="h-full rounded-full ' + (totalsData.remaining >= 0 ? "bg-emerald-300" : "bg-rose-300") + '" style="width:' + budgetPct + '%"></div></div></div></div></section>';
+    html += '<section class="relative overflow-hidden rounded-[2rem] border border-sky-100 bg-white p-4 shadow-sm md:p-5">';
+    html += '<div class="pointer-events-none absolute -right-12 -top-10 h-40 w-40 rounded-full bg-teal-50 blur-3xl"></div>';
+    html += '<div class="relative overflow-hidden rounded-[1.5rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-blue-50/70 to-teal-50/80 p-4 md:p-6">';
+    html += '<div class="pointer-events-none absolute -right-6 -top-8 h-36 w-36 rounded-full border border-sky-100/80"></div><div class="pointer-events-none absolute -right-1 top-0 h-28 w-28 rounded-full border border-sky-100/70"></div>';
+    html += '<div class="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0">';
+    html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full border border-white bg-white/85 px-3 py-1.5 text-xs font-semibold text-sky-700 shadow-sm">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
+    html += '<h2 class="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">' + esc(trip.name) + '</h2>';
+    html += '<p class="mt-2 flex items-center gap-2 text-sm text-slate-600 md:text-base">' + icon("map-pin", "h-4 w-4 shrink-0 text-sky-600") + ' ' + esc(trip.destination || "Ziel noch nicht eingetragen") + '</p>';
+    html += '<p class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-500">' + icon("calendar-days", "h-4 w-4 text-sky-600") + ' ' + shortDate(trip.startDate) + ' – ' + shortDate(trip.endDate) + '</p>';
+    html += '</div><div class="flex shrink-0 items-center gap-3 rounded-2xl border border-white bg-white/85 px-4 py-3 shadow-sm sm:min-w-[150px] sm:flex-col sm:items-center sm:justify-center sm:gap-1 sm:py-4"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">' + icon(tripInProgress ? "sun" : "calendar-clock", "h-5 w-5") + '</div><div class="text-center"><div class="text-base font-bold leading-tight text-slate-800">' + countdownNumber + '</div><div class="mt-1 text-xs leading-4 text-slate-500">' + countdownSub + '</div></div></div></div>';
+    html += '<div class="relative mt-4 flex flex-wrap gap-2"><button type="button" data-action="select-dashboard-trip" data-id="' + esc(trip.id) + '" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-700">' + icon("arrow-up-right", "h-4 w-4") + ' Reise öffnen</button>';
+    html += '<button type="button" data-action="navigate" data-page="trips" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-white/85 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-white">' + icon("map", "h-4 w-4") + ' Alle Urlaube</button></div></div>';
+    html += '<div class="relative mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3"><div class="rounded-2xl border border-sky-100 bg-white p-3.5"><div class="text-xs font-medium text-slate-500">Bisher ausgegeben</div><div class="mt-1 truncate text-lg font-bold text-slate-900">' + money(totalsData.total) + '</div></div>';
+    html += '<div class="rounded-2xl border border-teal-100 bg-white p-3.5"><div class="text-xs font-medium text-slate-500">Restbudget</div><div class="mt-1 truncate text-lg font-bold text-slate-900">' + money(totalsData.remaining) + '</div></div>';
+    html += '<div class="col-span-2 rounded-2xl border border-sky-100 bg-white p-3.5 sm:col-span-1"><div class="flex items-center justify-between text-xs font-medium text-slate-500"><span>Budget genutzt</span><span class="font-bold text-sky-700">' + budgetPct + '%</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-sky-50"><div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-teal-400" style="width:' + budgetPct + '%"></div></div></div></div></section>';
     return html;
   }
 
@@ -905,9 +900,9 @@
     const packPct = trip.packlist.length ? Math.round(packDone / trip.packlist.length * 100) : 0;
     const todoPct = trip.todos.length ? Math.round(todoDone / trip.todos.length * 100) : 0;
     let html = '<div class="grid gap-4 md:grid-cols-2">';
-    html += '<section class="rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-black/5 md:p-5"><div class="flex items-start gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">' + icon("luggage", "h-5 w-5") + '</div><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">Packliste</h2><p class="text-sm text-slate-500">Alles dabei?</p></div><div class="rounded-xl bg-blue-50 px-2.5 py-1.5 text-sm font-bold text-blue-700">' + packPct + '%</div></div>';
-    html += '<div class="mt-4 flex items-baseline gap-2"><span class="text-2xl font-bold text-slate-900">' + packDone + '</span><span class="text-sm text-slate-500">von ' + trip.packlist.length + ' erledigt</span></div><div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all" style="width:' + packPct + '%"></div></div>';
-    html += '<button type="button" data-action="open-dashboard-section" data-id="' + esc(trip.id) + '" data-page="more" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700 transition hover:bg-blue-100">' + icon("clipboard-list", "h-4 w-4") + ' Packliste öffnen ' + icon("arrow-right", "h-4 w-4") + '</button></section>';
+    html += '<section class="rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-black/5 md:p-5"><div class="flex items-start gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">' + icon("luggage", "h-5 w-5") + '</div><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">Packliste</h2><p class="text-sm text-slate-500">Alles dabei?</p></div><div class="rounded-xl bg-blue-50 px-2.5 py-1.5 text-sm font-bold text-blue-700">' + packPct + '%</div></div>';
+    html += '<div class="mt-4 flex items-baseline gap-2"><span class="text-2xl font-bold text-slate-900">' + packDone + '</span><span class="text-sm text-slate-500">von ' + trip.packlist.length + ' erledigt</span></div><div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-teal-400 transition-all" style="width:' + packPct + '%"></div></div>';
+    html += '<button type="button" data-action="open-dashboard-section" data-id="' + esc(trip.id) + '" data-page="more" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100">' + icon("clipboard-list", "h-4 w-4") + ' Packliste öffnen ' + icon("arrow-right", "h-4 w-4") + '</button></section>';
     html += '<section class="rounded-3xl bg-white/95 p-4 shadow-sm ring-1 ring-black/5 md:p-5"><div class="flex items-start gap-3"><div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">' + icon("check-circle-2", "h-5 w-5") + '</div><div class="min-w-0 flex-1"><h2 class="font-semibold text-slate-900">To-dos</h2><p class="text-sm text-slate-500">Die nächsten Schritte</p></div><div class="rounded-xl bg-emerald-50 px-2.5 py-1.5 text-sm font-bold text-emerald-700">' + todoPct + '%</div></div>';
     html += '<div class="mt-4 flex items-baseline gap-2"><span class="text-2xl font-bold text-slate-900">' + todoDone + '</span><span class="text-sm text-slate-500">von ' + trip.todos.length + ' erledigt</span></div><div class="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all" style="width:' + todoPct + '%"></div></div>';
     html += '<button type="button" data-action="open-dashboard-section" data-id="' + esc(trip.id) + '" data-page="more" class="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100">' + icon("list-checks", "h-4 w-4") + ' To-dos öffnen ' + icon("arrow-right", "h-4 w-4") + '</button></section></div>';
@@ -2109,7 +2104,7 @@
     if (activePage === "people") pageContent = peoplePageHTML();
     if (activePage === "more") pageContent = morePageHTML();
 
-    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 text-slate-900">
+    return `<div class="min-h-screen bg-gradient-to-b from-sky-50 via-white to-blue-50 text-slate-900">
       <div class="mx-auto w-full max-w-6xl px-4 pb-32 pt-5 md:px-6 md:pb-32 md:pt-6">
         ${error ? `<div class="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${esc(error)}</div>` : ""}
         ${pageContent}
@@ -3981,7 +3976,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=22").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=23").catch(() => {});
     }, { once: true });
   }
 
