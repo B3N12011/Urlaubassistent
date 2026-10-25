@@ -578,6 +578,11 @@
     const code = String(err?.code || "").toUpperCase();
     const status = Number(err?.status || err?.statusCode || 0);
 
+    if (err?.name === "FunctionsHttpError" || /edge function returned a non-2xx status/.test(lower)) {
+      return "Der serverseitige Vorgang konnte nicht abgeschlossen werden. Prüfe die Meldung und versuche es erneut.";
+    }
+    if (/invalid login credentials|invalid_credentials/.test(lower)) return "E-Mail oder Passwort stimmen nicht.";
+    if (/email not confirmed/.test(lower)) return "Deine E-Mail-Adresse wurde noch nicht bestätigt.";
     if (code === "42501" || status === 403 || /row-level security|permission denied|not authorized|insufficient privilege/.test(lower)) {
       return "Der Server hat den Zugriff verweigert. Prüfe, ob du für diesen Urlaub die nötigen Rechte hast.";
     }
@@ -1052,7 +1057,7 @@
   }
 
   function deleteAccountHTML() {
-    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 px-4 py-8 text-slate-900"><div class="mx-auto max-w-xl rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-black/5 md:p-8"><div class="mb-4 inline-flex items-center gap-2 rounded-full bg-rose-600 px-3 py-1 text-xs font-medium text-white">${icon("trash-2", "h-3.5 w-3.5")} Account löschen</div><h1 class="text-2xl font-bold tracking-tight md:text-3xl">Account wirklich löschen?</h1><p class="mt-3 text-sm leading-6 text-slate-600">Gib deine E-Mail und dein Passwort ein. Wenn du dein Passwort vergessen hast, kannst du es direkt zurücksetzen.</p><div class="mt-6 space-y-3">${inputHTML("email", deleteEmail, "E-Mail", `id="delete-email"`)}${inputHTML("password", deletePassword, "Passwort", `id="delete-password"`)}${buttonHTML(deleteLoading ? "Lösche..." : "Löschen", `data-action="delete-account" ${deleteLoading ? "disabled" : ""}`, "danger")}${buttonHTML("Passwort vergessen?", `data-action="account-reset"`, "soft")}${deleteMessage ? `<div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(deleteMessage)}</div>` : ""}${buttonHTML("Zurück", `data-action="cancel-account-delete"`, "soft")}</div></div></div>`;
+    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 px-4 py-8 text-slate-900"><div class="mx-auto max-w-xl rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-black/5 md:p-8"><div class="mb-4 inline-flex items-center gap-2 rounded-full bg-rose-600 px-3 py-1 text-xs font-medium text-white">${icon("trash-2", "h-3.5 w-3.5")} Account löschen</div><h1 class="text-2xl font-bold tracking-tight md:text-3xl">Account wirklich löschen?</h1><p class="mt-3 text-sm leading-6 text-slate-600">Bestätige deine aktuelle E-Mail-Adresse und dein Passwort. Vor dem Löschen werden deine Anmeldung und deine Berechtigung erneut geprüft.</p><div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm leading-5 text-rose-800"><div class="font-semibold">Diese Aktion ist dauerhaft.</div><p class="mt-1">Dein Konto sowie die zugehörigen Urlaubsdaten, Familienmitgliedschaften, gespeicherten Chats und persönlichen Daten werden gelöscht.</p></div><div class="mt-6 space-y-3">${inputHTML("email", deleteEmail, "E-Mail", `id="delete-email"`)}${inputHTML("password", deletePassword, "Passwort", `id="delete-password"`)}${buttonHTML(deleteLoading ? "Lösche..." : "Löschen", `data-action="delete-account" ${deleteLoading ? "disabled" : ""}`, "danger")}${buttonHTML("Passwort vergessen?", `data-action="account-reset"`, "soft")}${deleteMessage ? `<div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(deleteMessage)}</div>` : ""}${buttonHTML("Zurück", `data-action="cancel-account-delete"`, "soft")}</div></div></div>`;
   }
 
   function pageTitle() {
@@ -3674,22 +3679,79 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
   async function signOut(){await supabase.auth.signOut();session=null;render();}
 
   async function deleteAccount(){
-    deleteMessage="";
-    try{
-      if(!deleteEmail.trim())throw new Error("Bitte deine E-Mail eingeben.");
-      if(!deletePassword.trim()){deleteMessage="Bitte dein Passwort eingeben.";render();return;}
-      deleteLoading=true;render();
-      const login=await supabase.auth.signInWithPassword({email:deleteEmail.trim(),password:deletePassword});
-      if(login.error)throw login.error;
-      const uidv=login.data.user?.id||"";
-      const requests=["trip_people","trip_expenses","trip_tolls","trip_pack_items","trip_todos","trip_members"].map(table=>supabase.from(table).delete().eq("user_id",uidv));
-      await Promise.all(requests);
-      await supabase.from("trips").delete().eq("user_id",uidv);
-      const authAny=supabase.auth;
-      if(typeof authAny.admin?.deleteUser==="function"){ /* browser client has no admin delete */ }
-      await supabase.auth.signOut();
-      session=null;showDeleteAccount=false;
-    }catch(e){deleteMessage=e.message||"Account konnte nicht gelöscht werden.";}finally{deleteLoading=false;render();}
+    deleteMessage = "";
+    const expectedUserId = session?.user?.id || "";
+    const expectedEmail = String(session?.user?.email || "").trim().toLowerCase();
+    const enteredEmail = String(deleteEmail || "").trim().toLowerCase();
+
+    if (!expectedUserId || !expectedEmail) {
+      deleteMessage = "Bitte melde dich zuerst erneut an.";
+      render();
+      return;
+    }
+    if (!enteredEmail) {
+      deleteMessage = "Bitte gib deine E-Mail-Adresse ein.";
+      render();
+      return;
+    }
+    if (enteredEmail !== expectedEmail) {
+      deleteMessage = "Gib bitte die E-Mail-Adresse des aktuell angemeldeten Kontos ein.";
+      render();
+      return;
+    }
+    if (!deletePassword.trim()) {
+      deleteMessage = "Bitte gib dein Passwort zur Bestätigung ein.";
+      render();
+      return;
+    }
+
+    deleteLoading = true;
+    render();
+    try {
+      const login = await supabase.auth.signInWithPassword({
+        email: deleteEmail.trim(),
+        password: deletePassword
+      });
+      if (login.error) throw login.error;
+      if (login.data.user?.id !== expectedUserId) {
+        throw new Error("Das bestätigte Konto stimmt nicht mit dem aktuell angemeldeten Konto überein. Bitte melde dich erneut an.");
+      }
+
+      const result = await supabase.functions.invoke("delete-account", {
+        body: { email: deleteEmail.trim() }
+      });
+      if (result.error) {
+        let serverMessage = "";
+        try {
+          const response = result.error.context;
+          if (response instanceof Response) {
+            const payload = await response.clone().json();
+            serverMessage = String(payload?.error || payload?.message || "");
+          }
+        } catch {}
+        throw serverMessage ? new Error(serverMessage) : result.error;
+      }
+      if (result.data?.success !== true) {
+        throw new Error("Der Server hat die Kontolöschung nicht bestätigt. Bitte prüfe den Status, bevor du es erneut versuchst.");
+      }
+
+      await supabase.auth.signOut().catch(() => {});
+      session = null;
+      showDeleteAccount = false;
+      authMode = "signin";
+      authEmail = deleteEmail.trim();
+      authPassword = "";
+      authMessage = "Dein Konto und die zugehörigen Daten wurden dauerhaft gelöscht.";
+      authResetMessage = "";
+      deleteEmail = "";
+      deletePassword = "";
+    } catch (e) {
+      console.error("Kontolöschung fehlgeschlagen:", e);
+      deleteMessage = friendlyAppError(e, "Löschen des Kontos");
+    } finally {
+      deleteLoading = false;
+      render();
+    }
   }
 
   let authMode="signin";
@@ -4296,7 +4358,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=37").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=38").catch(() => {});
     }, { once: true });
   }
 
