@@ -1063,7 +1063,7 @@
   }
 
   function recoveryHTML() {
-    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 px-4 py-8 text-slate-900"><div class="mx-auto max-w-xl rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-black/5 md:p-8"><div class="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div><h1 class="text-2xl font-bold tracking-tight md:text-3xl">Neues Passwort setzen</h1><p class="mt-3 text-sm leading-6 text-slate-600">Lege jetzt ein neues Passwort für deinen Account fest.</p><div class="mt-6 space-y-3">${inputHTML("password", recoveryPassword, "Neues Passwort", `id="recovery-password"`)}${inputHTML("password", recoveryPassword2, "Passwort wiederholen", `id="recovery-password2"`)}${buttonHTML(recoveryLoading ? "Speichere..." : "Passwort speichern", `data-action="update-password" ${recoveryLoading ? "disabled" : ""}`)}${recoveryMessage ? `<div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(recoveryMessage)}</div>` : ""}</div></div></div>`;
+    return `<div class="min-h-screen bg-gradient-to-b from-slate-100 via-slate-50 to-slate-100 px-4 py-8 text-slate-900"><div class="mx-auto max-w-xl rounded-[2rem] bg-white p-6 shadow-xl ring-1 ring-black/5 md:p-8"><div class="mb-4 inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">${icon("sparkles", "h-3.5 w-3.5")} Urlaubassistent</div><h1 class="text-2xl font-bold tracking-tight md:text-3xl">Neues Passwort setzen</h1><p class="mt-3 text-sm leading-6 text-slate-600">Lege jetzt ein neues Passwort für deinen Account fest.</p><p class="mt-2 text-xs leading-5 text-slate-500">Mindestens 8 Zeichen mit Groß- und Kleinbuchstaben, einer Zahl und einem Sonderzeichen.</p><div class="mt-6 space-y-3">${inputHTML("password", recoveryPassword, "Neues Passwort", `id="recovery-password"`)}${inputHTML("password", recoveryPassword2, "Passwort wiederholen", `id="recovery-password2"`)}${buttonHTML(recoveryLoading ? "Speichere..." : "Passwort speichern", `data-action="update-password" ${recoveryLoading ? "disabled" : ""}`)}${recoveryMessage ? `<div class="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(recoveryMessage)}</div>` : ""}</div></div></div>`;
   }
 
   function deleteAccountHTML() {
@@ -1624,6 +1624,7 @@
               <div class="space-y-3">
                 ${inputHTML("password", settingsPassword, "Neues Passwort", `id="settings-password" autocomplete="new-password"`)}
                 ${inputHTML("password", settingsPassword2, "Neues Passwort wiederholen", `id="settings-password2" autocomplete="new-password"`)}
+                <p class="text-xs leading-5 text-slate-500">Mindestens 8 Zeichen mit Groß- und Kleinbuchstaben, einer Zahl und einem Sonderzeichen.</p>
                 ${buttonHTML(`${icon("key-round","h-4 w-4")} Passwort ändern`, `data-action="save-settings-password"`)}
               </div>
               ${settingsMessage && settingsMessage.startsWith("Passwort") ? `<div class="mt-3 rounded-2xl bg-${settingsMessage.includes("erfolgreich") ? "emerald" : "rose"}-50 px-4 py-3 text-sm ${settingsMessage.includes("erfolgreich") ? "text-emerald-800 ring-1 ring-emerald-100" : "text-rose-700 ring-1 ring-rose-100"}">${esc(settingsMessage)}</div>` : ""}
@@ -3745,8 +3746,35 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
         throw new Error("Der Server hat die Kontolöschung nicht bestätigt. Bitte prüfe den Status, bevor du es erneut versuchst.");
       }
 
+      const deletedTripIds = [...new Set(trips.map(trip => trip?.id).filter(Boolean))];
+      const userStoragePrefixes = [
+        K.aiChatPrefix + expectedUserId + "-",
+        "urlaubassistent-ai-active-conversation-" + expectedUserId + "-"
+      ];
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && userStoragePrefixes.some(prefix => key.startsWith(prefix))) localStorage.removeItem(key);
+      }
+      for (const tripId of deletedTripIds) {
+        localStorage.removeItem(K.activityPrefix + tripId);
+        localStorage.removeItem(K.checklistPrefix + tripId);
+        localStorage.removeItem(K.customExpenseCategoriesPrefix + tripId);
+        localStorage.removeItem("urlaubassistent-person-meta-" + tripId);
+        const reminderPrefix = K.reminderSentPrefix + tripId;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(reminderPrefix)) localStorage.removeItem(key);
+        }
+      }
+      localStorage.removeItem(K.trip);
       await supabase.auth.signOut({ scope: "local" }).catch(() => {});
       session = null;
+      trips = [];
+      selectedTripId = null;
+      family = null;
+      familyMembers = [];
+      aiMessages = [];
+      aiSavedChats = [];
       showDeleteAccount = false;
       authMode = "signin";
       authEmail = deleteEmail.trim();
@@ -4374,7 +4402,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=41").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=42").catch(() => {});
     }, { once: true });
   }
 
