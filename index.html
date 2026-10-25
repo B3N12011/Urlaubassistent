@@ -22,7 +22,56 @@
     input, select, textarea, button { font: inherit; }
     input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
     body { padding-bottom: 0; }
+
     nav button { -webkit-tap-highlight-color: transparent; }
+    /* Short, lightweight motion for page changes and touch feedback. */
+    .ua-page-enter > .space-y-6 > * {
+      animation: ua-page-item-in 340ms cubic-bezier(.2,.75,.25,1) both;
+    }
+    .ua-page-enter > .space-y-6 > *:nth-child(1) { animation-delay: 0ms; }
+    .ua-page-enter > .space-y-6 > *:nth-child(2) { animation-delay: 35ms; }
+    .ua-page-enter > .space-y-6 > *:nth-child(3) { animation-delay: 65ms; }
+    .ua-page-enter > .space-y-6 > *:nth-child(4) { animation-delay: 95ms; }
+    .ua-page-enter > .space-y-6 > *:nth-child(5) { animation-delay: 125ms; }
+    .ua-page-enter > .space-y-6 > *:nth-child(n+6) { animation-delay: 145ms; }
+    @keyframes ua-page-item-in {
+      from { opacity: 0; transform: translate3d(0, 11px, 0); }
+      to { opacity: 1; transform: translate3d(0, 0, 0); }
+    }
+    @keyframes ua-modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes ua-modal-panel-in {
+      from { opacity: 0; transform: translate3d(0, 10px, 0) scale(.985); }
+      to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+    }
+    .ua-modal-enter { animation: ua-modal-backdrop-in 190ms ease-out both; }
+    .ua-modal-enter > div { animation: ua-modal-panel-in 240ms cubic-bezier(.2,.75,.25,1) both; }
+    .modal-backdrop { animation: ua-modal-backdrop-in 190ms ease-out both; }
+    .modal-backdrop > div { animation: ua-modal-panel-in 240ms cubic-bezier(.2,.75,.25,1) both; }
+    nav button {
+      transition: color 200ms ease, background-color 220ms ease, box-shadow 220ms ease, transform 220ms cubic-bezier(.2,.75,.25,1);
+    }
+    nav button:active { transform: scale(.96); }
+    nav button span:first-child {
+      transition: transform 220ms cubic-bezier(.2,.75,.25,1), background-color 220ms ease, color 220ms ease;
+    }
+    nav button:active span:first-child { transform: scale(.92); }
+    button[data-action] {
+      transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+      transition-duration: 190ms;
+      transition-timing-function: cubic-bezier(.2,.75,.25,1);
+      -webkit-tap-highlight-color: transparent;
+    }
+    button[data-action]:active:not(:disabled) { transform: scale(.975); }
+    main#ua-page-content section { transition: box-shadow 220ms ease, border-color 220ms ease; }
+    @media (hover: hover) and (pointer: fine) {
+      main#ua-page-content section:hover { box-shadow: 0 10px 28px rgba(15, 23, 42, 0.055); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-page-enter > .space-y-6 > *, .ua-modal-enter, .ua-modal-enter > div,
+      .modal-backdrop, .modal-backdrop > div { animation: none !important; }
+      nav button, nav button span:first-child, button[data-action],
+      main#ua-page-content section { transition: none !important; }
+    }
     .person-dark-input {
       background: rgba(255, 255, 255, 0.07) !important;
       border-color: rgba(255, 255, 255, 0.12) !important;
@@ -370,6 +419,7 @@
   const PAGE_KEY = "urlaubassistent-active-page";
   const VALID_PAGES = ["overview", "trips", "expenses", "people", "more"];
   let activePage = localStorage.getItem(PAGE_KEY) || "overview";
+  let animateNextPage = true;
   if (!VALID_PAGES.includes(activePage)) activePage = "overview";
 
   let deleteDialog = null;
@@ -671,6 +721,7 @@
     }
 
     root.innerHTML = appHTML() + pwaInstallButtonHTML();
+    animateNextPage = false;
     lucide.createIcons();
     checkReminders();
   }
@@ -1351,7 +1402,7 @@
 
   function settingsHTML() {
     const username = settingsUsername || session?.user?.user_metadata?.urlaub_assistent_name || "";
-    return `<div class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 px-3 py-4 backdrop-blur-[3px]" role="dialog" aria-modal="true" aria-label="Einstellungen">
+    return `<div class="ua-modal-enter fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/45 px-3 py-4 backdrop-blur-[3px]" role="dialog" aria-modal="true" aria-label="Einstellungen">
       <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10">
         <div class="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur-xl sm:px-6">
           <div>
@@ -1769,7 +1820,7 @@
       ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-sky-600 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
       : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}${aiWebSearchNoticeHTML(m)}${m.actions && !m.actionsApplied ? aiActionPreviewHTML(m.actions,messageIndex) : ""}${messageIndex === showFollowUpsIndex ? aiFollowUpsHTML(m.followUps) : ""}</div></div>`
     ).join("");
-    return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
+    return `<div class="ua-modal-enter fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
       <div class="pointer-events-auto absolute bottom-0 right-0 flex h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-t-[2rem] bg-slate-50 shadow-2xl ring-1 ring-black/10 sm:bottom-24 sm:right-6 sm:h-[min(720px,82vh)] sm:rounded-[2rem]">
         <div class="shrink-0 bg-slate-950 px-5 py-4 text-white">
           <div class="flex items-center justify-between gap-3">
@@ -2100,7 +2151,7 @@
     return `<div class="min-h-screen bg-gradient-to-b from-sky-50 via-white to-blue-50 text-slate-900">
       <div class="mx-auto w-full max-w-6xl px-4 pb-32 pt-5 md:px-6 md:pb-32 md:pt-6">
         ${error ? `<div class="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${esc(error)}</div>` : ""}
-        ${pageContent}
+        <main id="ua-page-content" class="${animateNextPage ? "ua-page-enter" : ""}">${pageContent}</main>
       </div>
 
       <nav class="glass-nav fixed bottom-0 left-0 right-0 z-40 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2">
@@ -3669,6 +3720,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="navigate"){
         const page=el.dataset.page;
         if(VALID_PAGES.includes(page)){
+          if (page !== activePage) animateNextPage = true;
           activePage=page;
           localStorage.setItem(PAGE_KEY,activePage);
           readInputs();
@@ -3766,7 +3818,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
-      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){activePage=el.dataset.page||"more";localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
+      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){const nextPage=el.dataset.page||"more";if(nextPage!==activePage)animateNextPage=true;activePage=nextPage;localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
@@ -3969,7 +4021,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=26").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=27").catch(() => {});
     }, { once: true });
   }
 
