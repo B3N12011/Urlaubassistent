@@ -245,68 +245,114 @@
       pointer-events: none;
       opacity: 0.52;
     }
-    .ua-status-glow-one {
-      top: -8rem;
-      left: -8rem;
-      background: rgba(147,197,253,0.28);
+    .ua-status-glow-one { top: -8rem; left: -8rem; background: rgba(147,197,253,0.28); }
+    .ua-status-glow-two { right: -9rem; bottom: -10rem; background: rgba(191,219,254,0.44); }
+    .ua-loading-screen {
+      color: #f8fafc;
+      background:
+        radial-gradient(ellipse at 50% 38%, rgba(30,64,175,.34) 0%, rgba(15,23,42,0) 42%),
+        radial-gradient(ellipse at 85% 88%, rgba(8,145,178,.12) 0%, rgba(8,145,178,0) 32%),
+        linear-gradient(148deg, #070d1e 0%, #0f172a 48%, #111d3a 100%);
+      isolation: isolate;
     }
-    .ua-status-glow-two {
-      right: -9rem;
-      bottom: -10rem;
-      background: rgba(191,219,254,0.44);
+    .ua-loading-screen::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .18;
+      background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+    }
+    .ua-loading-screen .ua-status-glow {
+      width: 22rem; height: 22rem; filter: blur(72px); opacity: .8;
+      animation: ua-splash-drift 8s ease-in-out infinite alternate;
+    }
+    .ua-loading-screen .ua-status-glow-one { top: -11rem; left: -10rem; background: rgba(37,99,235,.28); }
+    .ua-loading-screen .ua-status-glow-two { right: -12rem; bottom: -12rem; background: rgba(6,182,212,.18); animation-delay: -3s; }
+    .ua-splash-content {
+      width: 100%; max-width: 26rem; padding: 2rem .5rem;
+      display: flex; flex-direction: column; align-items: center; text-align: center;
+    }
+    .ua-splash-logo-shell {
+      position: relative; display: flex; width: 136px; height: 136px;
+      align-items: center; justify-content: center;
+      border: 1px solid rgba(191,219,254,.27); border-radius: 38px;
+      background: linear-gradient(145deg, rgba(255,255,255,.14), rgba(255,255,255,.045));
+      box-shadow: 0 28px 70px rgba(0,0,0,.28), 0 0 0 8px rgba(147,197,253,.035), inset 0 1px 0 rgba(255,255,255,.18);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      animation: ua-splash-logo-arrive 700ms cubic-bezier(.2,.75,.25,1) both, ua-splash-logo-breathe 3.2s ease-in-out 700ms infinite;
+    }
+    .ua-splash-logo-shell::after {
+      content: ""; position: absolute; inset: -8px; border: 1px solid rgba(125,211,252,.10);
+      border-radius: 45px; pointer-events: none;
     }
     .ua-app-mark {
-      animation: ua-logo-arrive 650ms cubic-bezier(.2,.75,.25,1) both;
+      display: block; width: 108px; height: 108px; border-radius: 28px;
+      object-fit: cover; box-shadow: 0 12px 30px rgba(0,0,0,.24), 0 0 28px rgba(59,130,246,.16);
     }
+    .ua-splash-brand { margin-top: 2rem; font-size: 11px; font-weight: 800; letter-spacing: .19em; text-transform: uppercase; color: #93c5fd; }
+    .ua-splash-title { margin-top: .65rem; color: #fff; font-size: clamp(1.8rem, 7vw, 2.25rem); font-weight: 800; letter-spacing: -.045em; line-height: 1.12; }
+    .ua-splash-subtitle { margin-top: .75rem; max-width: 19rem; color: rgba(226,232,240,.76); font-size: .96rem; line-height: 1.6; }
+    .ua-splash-loading-row { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 18px; margin-top: 2rem; color: rgba(203,213,225,.78); font-size: .78rem; font-weight: 600; letter-spacing: .015em; }
+    .ua-loading-dots { display: flex; align-items: center; justify-content: center; gap: 7px; }
     .ua-loading-dots span {
-      display: block;
-      width: 9px;
-      height: 9px;
-      border-radius: 9999px;
-      background: #2563eb;
-      opacity: .45;
-      transform: translateY(0) scale(.82);
-      animation: ua-dot-bounce 850ms ease-in-out infinite;
+      display: block; width: 7px; height: 7px; border-radius: 9999px; background: #93c5fd;
+      opacity: .38; transform: translateY(0) scale(.8); animation: ua-dot-bounce 850ms ease-in-out infinite;
     }
     .ua-loading-dots span:nth-child(2) { animation-delay: 150ms; }
     .ua-loading-dots span:nth-child(3) { animation-delay: 300ms; }
-    .ua-offline-mark {
-      animation: ua-offline-arrive 450ms cubic-bezier(.2,.75,.25,1) both;
+    .ua-splash-progress { position: relative; overflow: hidden; width: 158px; height: 3px; margin-top: 1rem; border-radius: 999px; background: rgba(148,163,184,.17); }
+    .ua-splash-progress span {
+      display: block; width: 38%; height: 100%; border-radius: inherit;
+      background: linear-gradient(90deg, #60a5fa, #67e8f9); box-shadow: 0 0 14px rgba(96,165,250,.55);
+      animation: ua-splash-progress 1.55s ease-in-out infinite;
     }
+    .ua-splash-footer {
+      position: absolute; bottom: max(28px, env(safe-area-inset-bottom)); left: 0; right: 0;
+      display: flex; justify-content: center; align-items: center; gap: 10px;
+      color: rgba(148,163,184,.55); font-size: 9px; font-weight: 700; letter-spacing: .2em;
+    }
+    .ua-splash-footer-dot { width: 3px; height: 3px; border-radius: 50%; background: rgba(96,165,250,.7); }
+    .ua-offline-mark { animation: ua-offline-arrive 450ms cubic-bezier(.2,.75,.25,1) both; }
     @keyframes ua-dot-bounce {
-      0%, 60%, 100% { transform: translateY(0) scale(.82); opacity: .45; }
-      30% { transform: translateY(-9px) scale(1); opacity: 1; }
+      0%, 60%, 100% { transform: translateY(0) scale(.8); opacity: .38; }
+      30% { transform: translateY(-6px) scale(1); opacity: 1; }
     }
-    @keyframes ua-logo-arrive {
-      from { opacity: 0; transform: translateY(7px) scale(.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
+    @keyframes ua-splash-logo-arrive { from { opacity: 0; transform: translateY(12px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes ua-splash-logo-breathe {
+      0%, 100% { box-shadow: 0 28px 70px rgba(0,0,0,.28), 0 0 0 8px rgba(147,197,253,.035), inset 0 1px 0 rgba(255,255,255,.18); }
+      50% { box-shadow: 0 30px 76px rgba(0,0,0,.31), 0 0 0 12px rgba(147,197,253,.055), inset 0 1px 0 rgba(255,255,255,.2); }
     }
-    @keyframes ua-offline-arrive {
-      from { opacity: 0; transform: translateY(6px) scale(.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
+    @keyframes ua-splash-progress { 0% { transform: translateX(-110%); } 55% { transform: translateX(160%); } 100% { transform: translateX(330%); } }
+    @keyframes ua-splash-drift { from { transform: translate3d(-8px, 0, 0) scale(.96); } to { transform: translate3d(15px, 13px, 0) scale(1.05); } }
+    @keyframes ua-offline-arrive { from { opacity: 0; transform: translateY(6px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
     @media (prefers-reduced-motion: reduce) {
-      .ua-app-mark, .ua-offline-mark, .ua-loading-dots span { animation: none !important; }
+      .ua-app-mark, .ua-offline-mark, .ua-loading-dots span, .ua-splash-logo-shell,
+      .ua-loading-screen .ua-status-glow, .ua-splash-progress span { animation: none !important; }
     }
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-sky-50 via-white to-blue-50 text-slate-900">
 
 <div id="root">
-  <div class="ua-status-screen" role="status" aria-label="Urlaubassistent wird geladen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:24px;text-align:center;color:#0f172a;background:radial-gradient(ellipse at 50% 42%,#dbeafe 0%,#f8fafc 62%,#f8fafc 100%);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-    <div style="position:relative;z-index:1;display:flex;flex-direction:column;align-items:center">
-      <img src="./icon-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:28px;object-fit:cover;box-shadow:0 14px 36px rgba(30,64,175,.18);animation:ua-logo-arrive .65s ease both">
-      <div style="margin-top:18px;font-size:22px;font-weight:750;letter-spacing:-.4px">Urlaubassistent</div>
-      <div style="margin-top:5px;font-size:14px;color:#64748b">Dein Urlaub. Alles im Blick.</div>
-      <div style="display:flex;gap:9px;align-items:center;margin-top:28px" aria-hidden="true">
-        <span style="display:block;width:9px;height:9px;border-radius:50%;background:#2563eb;animation:ua-dot-bounce .8s ease-in-out infinite"></span>
-        <span style="display:block;width:9px;height:9px;border-radius:50%;background:#2563eb;animation:ua-dot-bounce .8s ease-in-out .16s infinite"></span>
-        <span style="display:block;width:9px;height:9px;border-radius:50%;background:#2563eb;animation:ua-dot-bounce .8s ease-in-out .32s infinite"></span>
+  <div class="ua-status-screen ua-loading-screen" role="status" aria-label="Urlaubassistent wird geladen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:24px;text-align:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#f8fafc">
+    <div class="ua-status-glow ua-status-glow-one"></div>
+    <div class="ua-status-glow ua-status-glow-two"></div>
+    <div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center">
+      <div class="ua-splash-content">
+        <div class="ua-splash-logo-shell"><img src="./icon-192.png" alt="" width="108" height="108" class="ua-app-mark"></div>
+        <div class="ua-splash-brand">Dein Reisebegleiter</div>
+        <div class="ua-splash-title">Urlaubassistent</div>
+        <div class="ua-splash-subtitle">Dein nächstes Abenteuer beginnt hier.</div>
+        <div class="ua-splash-loading-row"><div class="ua-loading-dots"><span></span><span></span><span></span></div><span>Deine Reisen werden vorbereitet</span></div>
+        <div class="ua-splash-progress" aria-hidden="true"><span></span></div>
       </div>
     </div>
+    <div class="ua-splash-footer" aria-hidden="true"><span>PLANEN</span><span class="ua-splash-footer-dot"></span><span>ENTDECKEN</span><span class="ua-splash-footer-dot"></span><span>ERINNERN</span></div>
   </div>
 </div>
-
 <script>
 (() => {
   "use strict";
@@ -794,18 +840,15 @@
   }
 
   function loadingHTML() {
-    return `<div class="ua-status-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6 text-slate-900">
-      <div class="ua-status-glow ua-status-glow-one"></div>
-      <div class="ua-status-glow ua-status-glow-two"></div>
-      <div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center">
-        <img src="icon-192.png" alt="Urlaubassistent" width="104" height="104" class="ua-app-mark mb-5 h-[104px] w-[104px] rounded-[28px] object-cover shadow-xl shadow-blue-900/15 ring-1 ring-white/80" />
-        <h1 class="text-xl font-bold tracking-tight text-slate-900">Urlaubassistent</h1>
-        <p class="mt-1 text-sm text-slate-500">Dein Urlaub. Alles im Blick.</p>
-        <div class="ua-loading-dots mt-7 flex items-center justify-center gap-2.5" role="status" aria-label="Urlaubassistent wird geladen">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
-    </div>`;
+    return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6 text-slate-100">' +
+      '<div class="ua-status-glow ua-status-glow-one"></div><div class="ua-status-glow ua-status-glow-two"></div>' +
+      '<div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center"><div class="ua-splash-content">' +
+      '<div class="ua-splash-logo-shell"><img src="./icon-192.png" alt="Urlaubassistent" width="108" height="108" class="ua-app-mark" /></div>' +
+      '<div class="ua-splash-brand">Dein Reisebegleiter</div><h1 class="ua-splash-title">Urlaubassistent</h1>' +
+      '<p class="ua-splash-subtitle">Dein nächstes Abenteuer beginnt hier.</p>' +
+      '<div class="ua-splash-loading-row" role="status" aria-label="Urlaubassistent wird geladen"><div class="ua-loading-dots"><span></span><span></span><span></span></div><span>Deine Reisen werden vorbereitet</span></div>' +
+      '<div class="ua-splash-progress" aria-hidden="true"><span></span></div></div></div>' +
+      '<div class="ua-splash-footer" aria-hidden="true"><span>PLANEN</span><span class="ua-splash-footer-dot"></span><span>ENTDECKEN</span><span class="ua-splash-footer-dot"></span><span>ERINNERN</span></div></div>';
   }
 
   function offlineHTML() {
@@ -4034,7 +4077,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=29").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=30").catch(() => {});
     }, { once: true });
   }
 
