@@ -687,7 +687,7 @@
   }
 
   function inputHTML(type, value, placeholder, attrs = "") {
-    const baseClass = "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-400 focus:ring-4 focus:ring-slate-100";
+    const baseClass = "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-50";
     const classMatch = attrs.match(/class=(?:"([^"]*)"|'([^']*)')/i);
     const extraClass = classMatch ? (classMatch[1] ?? classMatch[2] ?? "") : "";
     const cleanAttrs = classMatch ? attrs.replace(classMatch[0], "").trim() : attrs.trim();
@@ -1769,11 +1769,11 @@
 
   function aiChatHTML() {
     if (!aiOpen) {
-      return `<button type="button" data-action="toggle-ai" aria-label="Urlaubassistent KI öffnen" class="fixed bottom-[5.75rem] right-4 z-[90] flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-white/70 bg-white/78 text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,0.18),0_1px_0_rgba(255,255,255,0.92)_inset] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/90 active:scale-95 sm:bottom-24 sm:right-6">${icon("sparkles","h-6 w-6")}</button>`;
+      return `<button type="button" data-action="toggle-ai" aria-label="Urlaubassistent KI öffnen" class="fixed bottom-[5.75rem] right-4 z-[90] flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-sky-100 bg-white/90 text-sky-700 shadow-[0_12px_32px_rgba(14,116,144,0.12),0_1px_0_rgba(255,255,255,0.95)_inset] backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/90 active:scale-95 sm:bottom-24 sm:right-6">${icon("sparkles","h-6 w-6")}</button>`;
     }
     const showFollowUpsIndex = aiMessages.length && aiMessages[aiMessages.length - 1].role === "assistant" ? aiMessages.length - 1 : -1;
     const bubbles = aiMessages.map((m, messageIndex) => m.role === "user"
-      ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-slate-900 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
+      ? `<div class="flex justify-end"><div class="max-w-[88%] rounded-3xl rounded-br-lg bg-sky-600 px-4 py-3 text-sm leading-6 text-white shadow-sm">${esc(m.content).replace(/\n/g,"<br>")}</div></div>`
       : `<div class="flex items-start gap-2"><div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">${icon("sparkles","h-4 w-4")}</div><div class="max-w-[88%] min-w-0 rounded-3xl rounded-bl-lg bg-white px-4 py-3 text-sm leading-6 text-slate-700 ring-1 ring-slate-200 shadow-sm">${aiMarkdownHTML(m.content)}${aiSourcesHTML(m.sources, m.webSearchRequested)}${aiWebSearchNoticeHTML(m)}${m.actions && !m.actionsApplied ? aiActionPreviewHTML(m.actions,messageIndex) : ""}${messageIndex === showFollowUpsIndex ? aiFollowUpsHTML(m.followUps) : ""}</div></div>`
     ).join("");
     return `<div class="fixed inset-0 z-[120] bg-slate-950/18 backdrop-blur-[2px] sm:pointer-events-none">
@@ -3976,7 +3976,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=24").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=25").catch(() => {});
     }, { once: true });
   }
 
