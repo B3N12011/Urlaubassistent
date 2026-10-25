@@ -2856,6 +2856,8 @@
     if (!session?.user?.id) {
       family = null;
       familyMembers = [];
+      familyRenameOpen = false;
+      familyRenameName = "";
       familyLoading = false;
       return;
     }
@@ -2872,6 +2874,8 @@
       if (!membershipResult.data) {
         family = null;
         familyMembers = [];
+        familyRenameOpen = false;
+        familyRenameName = "";
         familySharedTripIds = new Set();
         familyInviteCode = "";
         familyLoading = false;
@@ -2895,6 +2899,7 @@
       if (membersResult.error) throw membersResult.error;
 
       family = familyResult.data;
+      if (!familyRenameOpen) familyRenameName = family.name;
       familyMembers = membersResult.data || [];
       familyError = "";
       await refreshFamilySharedTripStatus();
@@ -3236,7 +3241,7 @@
     const currentUserId = session?.user?.id;
     const isOwner = Boolean(family && family.owner_user_id === currentUserId);
     const familyStatus = familyMessage
-      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl ${familyMessage.startsWith("Automatisches Teilen ist aktiviert") || familyMessage.startsWith("Deine Family ist erstellt") || familyMessage.startsWith("Du bist der Family") || familyMessage.includes("kopiert") ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-800 ring-1 ring-slate-200"} px-3 py-3 text-sm">${icon("check-circle-2","h-4 w-4 shrink-0 mt-0.5")}${esc(familyMessage)}</div>`
+      ? `<div class="mt-3 flex items-start gap-2 rounded-2xl ${familyMessage.startsWith("Automatisches Teilen ist aktiviert") || familyMessage.startsWith("Deine Family ist erstellt") || familyMessage.startsWith("Du bist der Family") || familyMessage.includes("kopiert") || familyMessage.includes("gespeichert") || familyMessage.includes("gelöscht") ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-800 ring-1 ring-slate-200"} px-3 py-3 text-sm">${icon("check-circle-2","h-4 w-4 shrink-0 mt-0.5")}${esc(familyMessage)}</div>`
       : "";
     const familyProblem = familyError
       ? `<div class="mt-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${icon("alert-circle","h-4 w-4 shrink-0 mt-0.5")}${esc(familyError)}</div>`
@@ -4256,7 +4261,7 @@ await loadTrips();}catch(e){error=e.message||"Eintrag konnte nicht gelöscht wer
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=35").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=36").catch(() => {});
     }, { once: true });
   }
 
