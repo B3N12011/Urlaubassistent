@@ -3843,7 +3843,16 @@
   async function loadTrips() {
     if (!session) return;
     error = "";
+    if (!navigator.onLine) {
+      offline = true;
+      if (!restoreOfflineTripsCache()) {
+        error = "Keine Internetverbindung und noch keine lokal gespeicherten Urlaube auf diesem Gerät. Öffne die App einmal mit Internet, damit deine Reisen gespeichert werden können.";
+      }
+      render();
+      return;
+    }
     try {
+      if (pendingOfflineOperationCount() && !offlineSyncInProgress) await syncOfflineChanges({ renderAfter: false });
       const membershipsRes = await supabase.from("trip_members").select("trip_id, role").eq("user_id", session.user.id);
       if (membershipsRes.error) throw membershipsRes.error;
       const membershipMap = new Map();
@@ -3886,6 +3895,11 @@
         return { id:r.id,name:r.name,destination:r.destination||"",startDate:r.start_date||iso(),endDate:r.end_date||iso(),budget:Number(r.budget||0),status:r.status||"geplant",people:peopleByTrip.get(r.id)||[],expenses:expensesByTrip.get(r.id)||[],tolls:tollsByTrip.get(r.id)||[],packlist:packByTrip.get(r.id)||[],todos:todoByTrip.get(r.id)||[],role,shared:r.user_id!==session.user.id || role!=="owner" };
       });
 
+      readOfflineQueue().forEach(applyOfflineOperation);
+      offline = false;
+      offlineCacheLoaded = true;
+      saveOfflineTripsCache();
+
       if (!selectedTripId && trips[0]) selectedTripId = trips[0].id;
       if (selectedTripId && !trips.some(t=>t.id===selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
@@ -3893,10 +3907,16 @@
       await loadFamily();
     } catch (e) {
       console.error("Urlaubsdaten laden fehlgeschlagen:", e);
-      error = friendlyAppError(e, "Laden der Urlaubsdaten");
+      if (isOfflineNetworkFailure(e)) offline = true;
+      if (restoreOfflineTripsCache()) {
+        error = "";
+        if (pendingOfflineOperationCount()) offlineSyncMessage = "Deine lokalen Änderungen warten auf die Verbindung.";
+      } else {
+        error = friendlyAppError(e, "Laden der Urlaubsdaten");
+      }
     } finally {
       render();
-      setupRealtime();
+      if (navigator.onLine && !offline) setupRealtime();
     }
   }
 
@@ -4535,6 +4555,13 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
     try {
       if ((action === "select-expense-custom-category") && suppressExpenseCategoryClick) {
         suppressExpenseCategoryClick = false;
+        return;
+      }
+      if(action==="sync-offline-now"){
+        if(!navigator.onLine){offline=true;offlineSyncMessage="Keine Verbindung. Deine Änderungen bleiben lokal gespeichert.";render();return;}
+        offline=false;
+        const done=await syncOfflineChanges();
+        if(done) await loadTrips();
         return;
       }
       if(action==="navigate"){
