@@ -4319,7 +4319,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
         if(member && family?.owner_user_id === session?.user?.id && member.role !== "owner"){
           deleteDialog = {
             label: "Familienmitglied entfernen",
-            description: "Soll " + (member.display_name || "dieses Familienmitglied") + " wirklich aus der Family entfernt werden? Bereits einzeln geteilte Urlaube bleiben für diese Person weiterhin freigegeben.",
+            description: "Soll " + (member.display_name || "dieses Familienmitglied") + " wirklich aus der Family entfernt werden? Bereits freigegebene Urlaube bleiben für diese Person weiterhin sichtbar. Wenn du auch den Zugriff auf einzelne Urlaube entziehen möchtest, nutze vorher das X neben dem Namen in der Liste der Urlaubsfreigaben.",
             onConfirm: () => removeFamilyMember(member.id)
           };
           render();
@@ -4330,7 +4330,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
         if(family && family.owner_user_id !== session?.user?.id){
           deleteDialog = {
             label: "Family verlassen",
-            description: "Du wirst aus dieser Family entfernt. Urlaube, die vorher einzeln mit dir geteilt wurden, bleiben weiterhin in deinem Zugriff.",
+            description: "Du wirst aus dieser Family entfernt. Freigaben auf Urlaube bleiben bestehen. Wenn du andere Familienmitglieder nicht mehr auf deine Urlaube zugreifen lassen möchtest, entferne vorher deren Zugriff über das X in der Liste der Urlaubsfreigaben.",
             onConfirm: () => leaveFamily()
           };
           render();
@@ -4563,7 +4563,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=48").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=49").catch(() => {});
     }, { once: true });
   }
 
