@@ -2303,36 +2303,126 @@
   }
 
   async function applyAIActions(messageIndex) {
-    if(aiActionsApplying)return;
-    const message=aiMessages[messageIndex];const actions=normalizeAIActionProposal(message?.actions);const trip=activeTrip();
-    if(!actions||!trip){aiError="Bitte wähle zuerst einen Urlaub aus.";render();return;}
-    if(!session?.user?.id){aiError="Bitte melde dich an, um Änderungen zu speichern.";render();return;}
-    if(trip.role==="viewer"){aiError="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    const openTodos=trip.todos.filter(item=>!item.done).slice(0,20);
-    const openPacking=trip.packlist.filter(item=>!item.done).slice(0,20);
-    const completeTodoIds=actions.completeTodoIds.map(key=>{const match=/^todo-(\d+)$/.exec(String(key));return match?openTodos[Number(match[1])-1]?.id:null;}).filter(Boolean);
-    const completePackingIds=actions.completePackingIds.map(key=>{const match=/^packing-(\d+)$/.exec(String(key));return match?openPacking[Number(match[1])-1]?.id:null;}).filter(Boolean);
-    const expenses=actions.expenses.map(item=>{
-      const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
-      return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Sonstiges")||"Sonstiges",person_id:person?.id||null,note:item.note||"",expense_date:item.date||iso()};
+    if (aiActionsApplying) return;
+    const message = aiMessages[messageIndex];
+    const actions = normalizeAIActionProposal(message?.actions);
+    const trip = activeTrip();
+    if (!actions || !trip) { aiError = "Bitte wähle zuerst einen Urlaub aus."; render(); return; }
+    if (!session?.user?.id) { aiError = "Bitte melde dich an, um Änderungen zu speichern."; render(); return; }
+    if (trip.role === "viewer") { aiError = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+
+    const openTodos = trip.todos.filter(item => !item.done).slice(0, 20);
+    const openPacking = trip.packlist.filter(item => !item.done).slice(0, 20);
+    const completeTodoIds = actions.completeTodoIds.map(key => {
+      const match = /^todo-(\d+)$/.exec(String(key));
+      return match ? openTodos[Number(match[1]) - 1]?.id : null;
+    }).filter(Boolean);
+    const completePackingIds = actions.completePackingIds.map(key => {
+      const match = /^packing-(\d+)$/.exec(String(key));
+      return match ? openPacking[Number(match[1]) - 1]?.id : null;
+    }).filter(Boolean);
+
+    const operations = [];
+    actions.expenses.forEach(item => {
+      const person = item.personName ? trip.people.find(p => String(p.name).toLowerCase() === item.personName.toLowerCase()) : null;
+      operations.push({
+        table: "trip_expenses", method: "upsert", onConflict: "id",
+        payload: {
+          id: localOperationId(), user_id: session.user.id, trip_id: trip.id,
+          title: item.title, amount: item.amount,
+          category: normalizeExpenseCategory(item.category || "Sonstiges") || "Sonstiges",
+          person_id: person?.id || null, note: item.note || "", expense_date: item.date || iso()
+        }
+      });
     });
-    const tolls=actions.tolls.map(item=>{
-      const person=item.personName?trip.people.find(p=>String(p.name).toLowerCase()===item.personName.toLowerCase()):null;
-      return {user_id:session.user.id,trip_id:trip.id,title:item.title,amount:item.amount,category:normalizeExpenseCategory(item.category||"Parken")||"Parken",person_id:person?.id||null,note:item.note||"",toll_date:item.date||iso()};
+    actions.tolls.forEach(item => {
+      const person = item.personName ? trip.people.find(p => String(p.name).toLowerCase() === item.personName.toLowerCase()) : null;
+      operations.push({
+        table: "trip_tolls", method: "upsert", onConflict: "id",
+        payload: {
+          id: localOperationId(), user_id: session.user.id, trip_id: trip.id,
+          title: item.title, amount: item.amount,
+          category: normalizeExpenseCategory(item.category || "Parken") || "Parken",
+          person_id: person?.id || null, note: item.note || "", toll_date: item.date || iso()
+        }
+      });
     });
-    const counts={expenses:0,tolls:0,packing:0,todos:0,doneTodos:0,donePacking:0};aiActionsApplying=true;aiError="";render();
-    try{
-      if(expenses.length){const {error:e}=await supabase.from("trip_expenses").insert(expenses);if(e)throw e;counts.expenses=expenses.length;message.actions.expenses=[];addActivity(trip.id,"hat "+expenses.length+" KI-Ausgabe(n) eingetragen","receipt-text");}
-      if(tolls.length){const {error:e}=await supabase.from("trip_tolls").insert(tolls);if(e)throw e;counts.tolls=tolls.length;message.actions.tolls=[];addActivity(trip.id,"hat "+tolls.length+" KI-Gebühreneintrag/-einträge eingetragen","car-front");}
-      if(actions.packingItems.length){const rows=actions.packingItems.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_pack_items").insert(rows);if(e)throw e;counts.packing=rows.length;message.actions.packingItems=[];addActivity(trip.id,"hat "+rows.length+" KI-Packlistenpunkt(e) hinzugefügt","luggage");}
-      if(actions.todos.length){const rows=actions.todos.map(item=>({user_id:session.user.id,trip_id:trip.id,text:item.text,done:false}));const {error:e}=await supabase.from("trip_todos").insert(rows);if(e)throw e;counts.todos=rows.length;message.actions.todos=[];addActivity(trip.id,"hat "+rows.length+" KI-To-do(s) hinzugefügt","list-checks");}
-      if(completeTodoIds.length){const {error:e}=await supabase.from("trip_todos").update({done:true}).in("id",completeTodoIds).eq("trip_id",trip.id);if(e)throw e;counts.doneTodos=completeTodoIds.length;message.actions.completeTodoIds=[];}
-      if(completePackingIds.length){const {error:e}=await supabase.from("trip_pack_items").update({done:true}).in("id",completePackingIds).eq("trip_id",trip.id);if(e)throw e;counts.donePacking=completePackingIds.length;message.actions.completePackingIds=[];}
-      message.actions=null;message.actionsApplied=true;await loadTrips();
-      const saved=[];if(counts.expenses)saved.push(counts.expenses+" "+(counts.expenses===1?"Ausgabe":"Ausgaben"));if(counts.tolls)saved.push(counts.tolls+" Gebühreneinträge");if(counts.packing)saved.push(counts.packing+" Packlistenpunkte");if(counts.todos)saved.push(counts.todos+" To-dos");if(counts.doneTodos)saved.push(counts.doneTodos+" To-dos abgehakt");if(counts.donePacking)saved.push(counts.donePacking+" Packlistenpunkte abgehakt");
-      aiMessages=[...aiMessages,{role:"assistant",content:saved.length?"Erledigt! Gespeichert: "+saved.join(", ")+".":"Es gab keine gültigen Änderungen zum Speichern.",followUps:["Zeige mir mein aktuelles Budget","Was ist auf meiner Packliste noch offen?"]}];saveAIChatHistory();render();
-    }catch(e){aiError="Nicht alle Änderungen konnten gespeichert werden. Bitte prüfe die Listen, bevor du es erneut versuchst. "+(e?.message||"");render();}
-    finally{aiActionsApplying=false;render();}
+    actions.packingItems.forEach(item => operations.push({
+      table: "trip_pack_items", method: "upsert", onConflict: "id",
+      payload: { id: localOperationId(), user_id: session.user.id, trip_id: trip.id, text: item.text, done: false }
+    }));
+    actions.todos.forEach(item => operations.push({
+      table: "trip_todos", method: "upsert", onConflict: "id",
+      payload: { id: localOperationId(), user_id: session.user.id, trip_id: trip.id, text: item.text, done: false }
+    }));
+    completeTodoIds.forEach(id => operations.push({
+      table: "trip_todos", method: "update", payload: { done: true },
+      filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }]
+    }));
+    completePackingIds.forEach(id => operations.push({
+      table: "trip_pack_items", method: "update", payload: { done: true },
+      filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }]
+    }));
+
+    const counts = {
+      expenses: actions.expenses.length, tolls: actions.tolls.length,
+      packing: actions.packingItems.length, todos: actions.todos.length,
+      doneTodos: completeTodoIds.length, donePacking: completePackingIds.length
+    };
+    aiActionsApplying = true;
+    aiError = "";
+    render();
+    try {
+      const saved = operations.length ? await persistLocalFirstOperations(operations) : { queued: false };
+      if (counts.expenses) {
+        message.actions.expenses = [];
+        addActivity(trip.id, "hat " + counts.expenses + " KI-Ausgabe(n) eingetragen", "receipt-text");
+      }
+      if (counts.tolls) {
+        message.actions.tolls = [];
+        addActivity(trip.id, "hat " + counts.tolls + " KI-Gebühreneintrag/-einträge eingetragen", "car-front");
+      }
+      if (counts.packing) {
+        message.actions.packingItems = [];
+        addActivity(trip.id, "hat " + counts.packing + " KI-Packlistenpunkt(e) hinzugefügt", "luggage");
+      }
+      if (counts.todos) {
+        message.actions.todos = [];
+        addActivity(trip.id, "hat " + counts.todos + " KI-To-do(s) hinzugefügt", "list-checks");
+      }
+      if (completeTodoIds.length) message.actions.completeTodoIds = [];
+      if (completePackingIds.length) message.actions.completePackingIds = [];
+      if (!saved.queued) {
+        if (counts.expenses) broadcastActivity(trip.id, "hat " + counts.expenses + " KI-Ausgabe(n) eingetragen", "receipt-text");
+        if (counts.tolls) broadcastActivity(trip.id, "hat " + counts.tolls + " KI-Gebühreneintrag/-einträge eingetragen", "car-front");
+        if (counts.packing) broadcastActivity(trip.id, "hat " + counts.packing + " KI-Packlistenpunkt(e) hinzugefügt", "luggage");
+        if (counts.todos) broadcastActivity(trip.id, "hat " + counts.todos + " KI-To-do(s) hinzugefügt", "list-checks");
+      }
+      message.actions = null;
+      message.actionsApplied = true;
+      await loadTrips();
+
+      const savedSummary = [];
+      if (counts.expenses) savedSummary.push(counts.expenses + " " + (counts.expenses === 1 ? "Ausgabe" : "Ausgaben"));
+      if (counts.tolls) savedSummary.push(counts.tolls + " Gebühreneinträge");
+      if (counts.packing) savedSummary.push(counts.packing + " Packlistenpunkte");
+      if (counts.todos) savedSummary.push(counts.todos + " To-dos");
+      if (counts.doneTodos) savedSummary.push(counts.doneTodos + " To-dos abgehakt");
+      if (counts.donePacking) savedSummary.push(counts.donePacking + " Packlistenpunkte abgehakt");
+      const content = saved.queued
+        ? "Lokal gespeichert. " + savedSummary.join(", ") + (savedSummary.length ? " – wird bei Wiederverbindung synchronisiert." : "Die Änderungen werden bei Wiederverbindung synchronisiert.")
+        : (savedSummary.length ? "Erledigt! Gespeichert: " + savedSummary.join(", ") + "." : "Es gab keine gültigen Änderungen zum Speichern.");
+      aiMessages = [...aiMessages, { role: "assistant", content, followUps: ["Zeige mir mein aktuelles Budget", "Was ist auf meiner Packliste noch offen?"] }];
+      saveAIChatHistory();
+      render();
+    } catch (e) {
+      console.error("KI-Änderungen konnten nicht gespeichert werden:", e);
+      aiError = friendlyAppError(e, "Speichern der KI-Änderungen") + " Prüfe die Listen, bevor du es erneut versuchst.";
+      render();
+    } finally {
+      aiActionsApplying = false;
+      render();
+    }
   }
 
   function discardAIActions(messageIndex) {
