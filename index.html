@@ -4027,24 +4027,42 @@
     }
   }
 
-  async function addPerson(){
-    const trip=activeTrip();
-    if(!trip||!newPersonName.trim())return;
-    if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    try{const name=newPersonName.trim();const {error:e}=await supabase.from("trip_people").insert({user_id:session.user.id,trip_id:trip.id,name});if(e)throw e;addActivity(trip.id,`hat die Person „${name}“ hinzugefügt`,"user-round-plus");
-      broadcastActivity(trip.id,`hat die Person „${name}“ hinzugefügt`,"user-round-plus");newPersonName="";await loadTrips();}catch(e){console.error("Person hinzufügen fehlgeschlagen:",e);error=friendlyAppError(e,"Hinzufügen der Person");render();}
+  async function addPerson() {
+    const trip = activeTrip();
+    const name = newPersonName.trim();
+    if (!trip || !name) return;
+    if (trip.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    try {
+      const personId = localOperationId();
+      const saved = await persistLocalFirstOperations([{
+        table: "trip_people", method: "upsert", onConflict: "id",
+        payload: { id: personId, user_id: session.user.id, trip_id: trip.id, name }
+      }]);
+      addActivity(trip.id, "hat die Person „" + name + "“ hinzugefügt", "user-round-plus");
+      if (!saved.queued) broadcastActivity(trip.id, "hat die Person „" + name + "“ hinzugefügt", "user-round-plus");
+      newPersonName = "";
+      await loadTrips();
+    } catch (e) {
+      console.error("Person hinzufügen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Hinzufügen der Person");
+      render();
+    }
   }
 
-  async function deletePerson(id){
-    const trip=activeTrip();
-    if(!trip||trip.role==="viewer")throw new Error("Du hast in diesem geteilten Urlaub nur Leserechte.");
-    const a=await supabase.from("trip_expenses").update({person_id:null}).eq("trip_id",trip.id).eq("person_id",id);if(a.error)throw a.error;
-    const b=await supabase.from("trip_tolls").update({person_id:null}).eq("trip_id",trip.id).eq("person_id",id);if(b.error)throw b.error;
-    const c=await supabase.from("trip_people").delete().eq("id",id);if(c.error)throw c.error;
-    selectedPersonId=null;
-    const { [id]:_removed, ...budgets }=personMeta.budgets;
-    personMeta.budgets=budgets;
-    personMeta.debts=personMeta.debts.filter(d=>d.fromPersonId!==id && d.toPersonId!==id);
+  async function deletePerson(id) {
+    const trip = activeTrip();
+    if (!trip || trip.role === "viewer") throw new Error("Du hast in diesem geteilten Urlaub nur Leserechte.");
+    const operations = [
+      { table: "trip_expenses", method: "update", payload: { person_id: null }, filters: [{ column: "trip_id", value: trip.id }, { column: "person_id", value: id }] },
+      { table: "trip_tolls", method: "update", payload: { person_id: null }, filters: [{ column: "trip_id", value: trip.id }, { column: "person_id", value: id }] },
+      { table: "trip_people", method: "delete", filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }] }
+    ];
+    await persistLocalFirstOperations(operations);
+    selectedPersonId = null;
+    const { [id]: _removed, ...budgets } = personMeta.budgets;
+    personMeta.budgets = budgets;
+    personMeta.debts = personMeta.debts.filter(debt => debt.fromPersonId !== id && debt.toPersonId !== id);
+    persistPersonMeta();
     await loadTrips();
   }
 
