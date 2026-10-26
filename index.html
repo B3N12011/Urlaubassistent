@@ -3696,7 +3696,7 @@
     const payload = op.payload || {};
     const filters = op.filters || [];
     const method = op.method;
-    const tripFilter = filters.find(filter => filter.column === "trip_id")?.value;
+    const tripFilter = filters.find(filter => filter.column === "trip_id")?.value || payload.trip_id;
     const rowId = payload.id || filters.find(filter => filter.column === "id")?.value;
 
     if (table === "trips") {
@@ -5155,7 +5155,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=51").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=52").catch(() => {});
     }, { once: true });
   }
 
