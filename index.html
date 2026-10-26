@@ -416,6 +416,9 @@
   const MIN_SPLASH_MS = 2600;
   let checking = true;
   let offline = !navigator.onLine;
+  let offlineCacheLoaded = false;
+  let offlineSyncInProgress = false;
+  let offlineSyncMessage = "";
   let error = "";
   let trips = [];
   let selectedTripId = localStorage.getItem(K.trip) || null;
@@ -3505,6 +3508,335 @@
       </div>
       ${familyProblem}${familyStatus}
     `);
+  }
+
+  const OFFLINE_CACHE_PREFIX = "urlaubassistent-offline-trips-v1-";
+  const OFFLINE_QUEUE_PREFIX = "urlaubassistent-offline-queue-v1-";
+
+  function localOperationId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return "offline-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+  }
+
+  function offlineStorageKey(prefix) {
+    return session?.user?.id ? prefix + session.user.id : "";
+  }
+
+  function readOfflineQueue() {
+    const key = offlineStorageKey(OFFLINE_QUEUE_PREFIX);
+    if (!key) return [];
+    try {
+      const value = JSON.parse(localStorage.getItem(key) || "[]");
+      return Array.isArray(value) ? value.filter(item => item && item.userId === session.user.id && item.table && item.method) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeOfflineQueue(queue) {
+    const key = offlineStorageKey(OFFLINE_QUEUE_PREFIX);
+    if (!key) throw new Error("Bitte melde dich an, bevor lokale Änderungen gespeichert werden.");
+    localStorage.setItem(key, JSON.stringify(queue));
+  }
+
+  function pendingOfflineOperationCount() {
+    return readOfflineQueue().length;
+  }
+
+  function isOfflineNetworkFailure(err) {
+    const message = String(err?.message || err || "").toLowerCase();
+    if (!navigator.onLine) return true;
+    if (Number(err?.status || err?.statusCode || 0) > 0 || err?.code === "42501") return false;
+    return err?.name === "TypeError" ||
+      /failed to fetch|networkerror|network request failed|fetch failed|load failed|internet disconnected|connection refused|network is unreachable/.test(message);
+  }
+
+  function offlineColumnToProperty(table, column) {
+    const maps = {
+      trips: { start_date: "startDate", end_date: "endDate", user_id: "userId" },
+      trip_people: { user_id: "userId" },
+      trip_expenses: { person_id: "personId", expense_date: "date", user_id: "userId" },
+      trip_tolls: { person_id: "personId", toll_date: "date", user_id: "userId" },
+      trip_pack_items: { user_id: "userId" },
+      trip_todos: { user_id: "userId" }
+    };
+    return maps[table]?.[column] || column;
+  }
+
+  function offlineModelRow(table, row) {
+    if (table === "trip_people") return { id: row.id, name: row.name };
+    if (table === "trip_expenses") return { id: row.id, title: row.title, amount: Number(row.amount || 0), category: row.category || "Sonstiges", personId: row.person_id || null, date: row.expense_date || iso(), note: row.note || "" };
+    if (table === "trip_tolls") return { id: row.id, title: row.title, amount: Number(row.amount || 0), category: row.category || "Maut", personId: row.person_id || null, date: row.toll_date || iso(), note: row.note || "" };
+    if (table === "trip_pack_items" || table === "trip_todos") return { id: row.id, text: row.text, done: Boolean(row.done) };
+    return { ...row };
+  }
+
+  function offlineApplyPayloadToModel(table, model, payload) {
+    for (const [column, value] of Object.entries(payload || {})) {
+      if (column === "trip_id" || column === "id" || column === "user_id" || column === "created_at" || column === "updated_at") continue;
+      model[offlineColumnToProperty(table, column)] = value;
+    }
+    if (Object.prototype.hasOwnProperty.call(payload || {}, "amount")) model.amount = Number(payload.amount || 0);
+    if (Object.prototype.hasOwnProperty.call(payload || {}, "done")) model.done = Boolean(payload.done);
+    if (Object.prototype.hasOwnProperty.call(payload || {}, "person_id")) model.personId = payload.person_id || null;
+    return model;
+  }
+
+  function offlineFiltersMatch(table, model, filters, tripId) {
+    return (filters || []).every(filter => {
+      if (filter.column === "trip_id") return String(tripId || "") === String(filter.value || "");
+      const property = offlineColumnToProperty(table, filter.column);
+      if (property === "user_id" || property === "userId") return true;
+      const left = model?.[property];
+      const right = filter.value;
+      return left == null && right == null ? true : String(left) === String(right);
+    });
+  }
+
+  function applyOfflineOperation(op) {
+    if (!op || op.userId !== session?.user?.id) return;
+    const table = op.table;
+    const payload = op.payload || {};
+    const filters = op.filters || [];
+    const method = op.method;
+    const tripFilter = filters.find(filter => filter.column === "trip_id")?.value;
+    const rowId = payload.id || filters.find(filter => filter.column === "id")?.value;
+
+    if (table === "trips") {
+      if (method === "delete") {
+        const id = rowId;
+        trips = trips.filter(trip => trip.id !== id);
+        if (selectedTripId === id) selectedTripId = trips[0]?.id || null;
+        return;
+      }
+      let trip = trips.find(item => item.id === (payload.id || rowId));
+      if (!trip && (method === "upsert" || method === "insert")) {
+        trip = {
+          id: payload.id, name: payload.name || "Neuer Urlaub", destination: payload.destination || "",
+          startDate: payload.start_date || iso(), endDate: payload.end_date || iso(),
+          budget: Number(payload.budget || 0), status: payload.status || "geplant",
+          people: [], expenses: [], tolls: [], packlist: [], todos: [],
+          role: "owner", shared: false
+        };
+        trips.unshift(trip);
+      }
+      if (trip) {
+        offlineApplyPayloadToModel("trips", trip, payload);
+        if (payload.name) trip.name = payload.name;
+        if (payload.destination !== undefined) trip.destination = payload.destination || "";
+        if (payload.start_date) trip.startDate = payload.start_date;
+        if (payload.end_date) trip.endDate = payload.end_date;
+        if (payload.budget !== undefined) trip.budget = Number(payload.budget || 0);
+        trip.role = trip.role || "owner";
+      }
+      return;
+    }
+
+    if (table === "trip_members" || table === "trip_share_codes") return;
+
+    let trip = tripFilter ? trips.find(item => item.id === tripFilter) : null;
+    if (!trip && rowId) {
+      trip = trips.find(item => {
+        const key = table === "trip_people" ? "people" :
+          table === "trip_expenses" ? "expenses" :
+          table === "trip_tolls" ? "tolls" :
+          table === "trip_pack_items" ? "packlist" :
+          table === "trip_todos" ? "todos" : "";
+        return key && item[key]?.some(row => row.id === rowId);
+      });
+    }
+    if (!trip) return;
+
+    const key = table === "trip_people" ? "people" :
+      table === "trip_expenses" ? "expenses" :
+      table === "trip_tolls" ? "tolls" :
+      table === "trip_pack_items" ? "packlist" :
+      table === "trip_todos" ? "todos" : "";
+    if (!key) return;
+    const rows = Array.isArray(trip[key]) ? trip[key] : (trip[key] = []);
+
+    if (method === "delete") {
+      trip[key] = rows.filter(row => !offlineFiltersMatch(table, row, filters, trip.id));
+      return;
+    }
+    if (method === "upsert" || method === "insert") {
+      let row = payload.id ? rows.find(item => item.id === payload.id) : null;
+      if (!row) {
+        row = offlineModelRow(table, payload);
+        rows.push(row);
+      } else {
+        offlineApplyPayloadToModel(table, row, payload);
+      }
+      return;
+    }
+    if (method === "update") {
+      rows.forEach(row => {
+        if (offlineFiltersMatch(table, row, filters, trip.id)) offlineApplyPayloadToModel(table, row, payload);
+      });
+    }
+  }
+
+  function saveOfflineTripsCache() {
+    const key = offlineStorageKey(OFFLINE_CACHE_PREFIX);
+    if (!key || !session?.user?.id) return false;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        version: 1, userId: session.user.id, savedAt: new Date().toISOString(),
+        selectedTripId, trips
+      }));
+      offlineCacheLoaded = true;
+      return true;
+    } catch (e) {
+      console.error("Offline-Cache konnte nicht gespeichert werden:", e);
+      offlineSyncMessage = "Der Gerätespeicher ist voll. Einige Änderungen können möglicherweise nicht lokal gesichert werden.";
+      return false;
+    }
+  }
+
+  function restoreOfflineTripsCache() {
+    const key = offlineStorageKey(OFFLINE_CACHE_PREFIX);
+    if (!key || !session?.user?.id) return false;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "null");
+      if (!saved || saved.version !== 1 || saved.userId !== session.user.id || !Array.isArray(saved.trips)) return false;
+      trips = saved.trips;
+      selectedTripId = saved.selectedTripId || localStorage.getItem(K.trip) || trips[0]?.id || null;
+      if (selectedTripId && !trips.some(trip => trip.id === selectedTripId)) selectedTripId = trips[0]?.id || null;
+      if (!daySelected && trips[0]) daySelected = trips[0].startDate;
+      offlineCacheLoaded = true;
+      readOfflineQueue().forEach(applyOfflineOperation);
+      saveOfflineTripsCache();
+      return true;
+    } catch (e) {
+      console.warn("Offline-Cache konnte nicht gelesen werden:", e);
+      return false;
+    }
+  }
+
+  async function executeOfflineOperation(op) {
+    if (!session?.user?.id || op.userId !== session.user.id) throw new Error("Die gespeicherten Änderungen gehören nicht zu diesem Konto.");
+    let query = supabase.from(op.table);
+    if (op.method === "upsert") {
+      const options = { onConflict: op.onConflict || (op.table === "trip_members" ? "trip_id,user_id" : "id") };
+      if (op.ignoreDuplicates) options.ignoreDuplicates = true;
+      query = query.upsert(op.payload, options);
+    } else if (op.method === "update") {
+      query = query.update(op.payload);
+    } else if (op.method === "delete") {
+      query = query.delete();
+    } else {
+      throw new Error("Unbekannte lokale Änderung.");
+    }
+    (op.filters || []).forEach(filter => {
+      query = filter.value === null ? query.is(filter.column, null) : query.eq(filter.column, filter.value);
+    });
+    const result = await query;
+    if (result.error) throw result.error;
+  }
+
+  async function queueOfflineOperations(operations) {
+    const queue = readOfflineQueue();
+    for (const op of operations) {
+      if (!queue.some(existing => existing.queueId === op.queueId)) queue.push(op);
+      applyOfflineOperation(op);
+    }
+    writeOfflineQueue(queue);
+    const saved = saveOfflineTripsCache();
+    if (!saved) throw new Error("Die Änderung wurde vorbereitet, aber der lokale Gerätespeicher konnte nicht vollständig gesichert werden. Bitte schaffe Speicherplatz und versuche es erneut.");
+    offlineSyncMessage = queue.length + (queue.length === 1 ? " Änderung lokal gespeichert. Synchronisierung folgt bei Verbindung." : " Änderungen lokal gespeichert. Synchronisierung folgt bei Verbindung.");
+    render();
+  }
+
+  async function persistLocalFirstOperations(operations) {
+    if (!session?.user?.id) throw new Error("Bitte melde dich an, bevor du Änderungen speicherst.");
+    const prepared = operations.map(operation => ({
+      ...operation,
+      queueId: operation.queueId || localOperationId(),
+      userId: session.user.id,
+      filters: operation.filters || []
+    }));
+
+    if (!navigator.onLine) {
+      await queueOfflineOperations(prepared);
+      return { queued: true };
+    }
+
+    try {
+      for (const op of prepared) await executeOfflineOperation(op);
+      prepared.forEach(applyOfflineOperation);
+      saveOfflineTripsCache();
+      if (pendingOfflineOperationCount() === 0) offlineSyncMessage = "";
+      return { queued: false };
+    } catch (e) {
+      if (isOfflineNetworkFailure(e)) {
+        await queueOfflineOperations(prepared);
+        return { queued: true, error: e };
+      }
+      throw e;
+    }
+  }
+
+  async function syncOfflineChanges(options = {}) {
+    const renderAfter = options.renderAfter !== false;
+    if (!session?.user?.id || !navigator.onLine || offlineSyncInProgress) return false;
+    if (!pendingOfflineOperationCount()) {
+      offlineSyncMessage = "";
+      return true;
+    }
+    offlineSyncInProgress = true;
+    offline = false;
+    offlineSyncMessage = "Änderungen werden mit deinem Konto synchronisiert …";
+    if (renderAfter) render();
+    try {
+      while (true) {
+        const queue = readOfflineQueue();
+        const op = queue[0];
+        if (!op) break;
+        try {
+          await executeOfflineOperation(op);
+        } catch (e) {
+          console.error("Offline-Synchronisierung fehlgeschlagen:", e);
+          if (isOfflineNetworkFailure(e)) offline = true;
+          const remaining = readOfflineQueue().length;
+          offlineSyncMessage = friendlyAppError(e, "Synchronisieren") + (remaining ? " Noch " + remaining + (remaining === 1 ? " Änderung wartet." : " Änderungen warten.") : "");
+          break;
+        }
+        writeOfflineQueue(readOfflineQueue().filter(item => item.queueId !== op.queueId));
+      }
+      const remaining = pendingOfflineOperationCount();
+      if (!remaining) {
+        offline = false;
+        offlineSyncMessage = "";
+        saveOfflineTripsCache();
+      }
+      return remaining === 0;
+    } catch (e) {
+      console.error("Lokale Änderungen konnten nicht synchronisiert werden:", e);
+      offlineSyncMessage = friendlyAppError(e, "Synchronisieren");
+      return false;
+    } finally {
+      offlineSyncInProgress = false;
+      if (renderAfter) render();
+    }
+  }
+
+  function offlineStatusHTML() {
+    const pending = pendingOfflineOperationCount();
+    const offlineNow = offline || !navigator.onLine;
+    if (!offlineNow && !pending && !offlineSyncMessage) return "";
+    const title = offlineSyncInProgress ? "Synchronisierung läuft" : offlineNow ? "Offline-Modus" : pending ? "Änderungen warten auf Synchronisierung" : "Synchronisierung";
+    const message = offlineNow
+      ? "Deine gespeicherten Reisen bleiben verfügbar. Neue Änderungen werden zuerst auf diesem Gerät gespeichert."
+      : pending
+        ? "Die Änderungen bleiben auf diesem Gerät erhalten und werden erneut übertragen, sobald die Verbindung funktioniert."
+        : offlineSyncMessage;
+    return '<div class="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:flex-row sm:items-center">' +
+      '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">' + icon(offlineNow ? "wifi-off" : "cloud-upload", "h-5 w-5") + '</span>' +
+      '<div class="min-w-0 flex-1"><div class="text-sm font-semibold text-slate-900">' + esc(title) + '</div><p class="mt-1 text-xs leading-5 text-slate-500">' + esc(message) + '</p>' +
+      (pending ? '<div class="mt-1 text-xs font-semibold text-slate-700">' + pending + (pending === 1 ? ' ausstehende Änderung' : ' ausstehende Änderungen') + '</div>' : '') +
+      '</div>' +
+      (navigator.onLine && pending && !offlineSyncInProgress ? '<button type="button" data-action="sync-offline-now" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-900 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800">' + icon("refresh-cw", "h-4 w-4") + ' Jetzt synchronisieren</button>' : '') +
+      '</div>';
   }
 
   async function loadTrips() {
