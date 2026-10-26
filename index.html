@@ -4158,24 +4158,70 @@
     }
   }
 
-  async function addList(kind){
-    const trip=activeTrip();
-    if(!trip)return;
-    if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    const text=kind==="pack"?newPackItem.trim():newTodoItem.trim();if(!text)return;
-    try{const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").insert({user_id:session.user.id,trip_id:trip.id,text,done:false});if(e)throw e;const listText=kind==="pack"?`hat „${text}“ zur Packliste hinzugefügt`:`hat das To-do „${text}“ hinzugefügt`;const listIcon=kind==="pack"?"clipboard-list":"check-circle-2";addActivity(trip.id,listText,listIcon);broadcastActivity(trip.id,listText,listIcon);if(kind==="pack")newPackItem="";else newTodoItem="";await loadTrips();}catch(e){console.error("Listeneintrag hinzufügen fehlgeschlagen:",e);error=friendlyAppError(e,"Hinzufügen des Listeneintrags");render();}
+  async function addList(kind) {
+    const trip = activeTrip();
+    if (!trip) return;
+    if (trip.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    const text = kind === "pack" ? newPackItem.trim() : newTodoItem.trim();
+    if (!text) return;
+    try {
+      const id = localOperationId();
+      const table = kind === "pack" ? "trip_pack_items" : "trip_todos";
+      const saved = await persistLocalFirstOperations([{
+        table, method: "upsert", onConflict: "id",
+        payload: { id, user_id: session.user.id, trip_id: trip.id, text, done: false }
+      }]);
+      const activity = kind === "pack" ? "hat „" + text + "“ zur Packliste hinzugefügt" : "hat das To-do „" + text + "“ hinzugefügt";
+      const activityIcon = kind === "pack" ? "clipboard-list" : "check-circle-2";
+      addActivity(trip.id, activity, activityIcon);
+      if (!saved.queued) broadcastActivity(trip.id, activity, activityIcon);
+      if (kind === "pack") newPackItem = ""; else newTodoItem = "";
+      await loadTrips();
+    } catch (e) {
+      console.error("Listeneintrag hinzufügen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Hinzufügen des Listeneintrags");
+      render();
+    }
   }
 
-  async function toggleList(kind,id){
-    const trip=activeTrip();if(!trip)return;if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    try{const items=kind==="pack"?trip.packlist:trip.todos;const item=items.find(x=>x.id===id);if(!item)return;const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").update({done:!item.done}).eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){console.error("Listeneintrag ändern fehlgeschlagen:",e);error=friendlyAppError(e,"Ändern des Listeneintrags");render();}
+  async function toggleList(kind, id) {
+    const trip = activeTrip();
+    if (!trip) return;
+    if (trip.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    try {
+      const rows = kind === "pack" ? trip.packlist : trip.todos;
+      const item = rows.find(row => row.id === id);
+      if (!item) return;
+      await persistLocalFirstOperations([{
+        table: kind === "pack" ? "trip_pack_items" : "trip_todos",
+        method: "update",
+        payload: { done: !item.done },
+        filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }]
+      }]);
+      await loadTrips();
+    } catch (e) {
+      console.error("Listeneintrag ändern fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Ändern des Listeneintrags");
+      render();
+    }
   }
 
-  async function deleteList(kind,id){
-    const trip=activeTrip();if(!trip)return;if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    try{const {error:e}=await supabase.from(kind==="pack"?"trip_pack_items":"trip_todos").delete().eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Listeneintrags");render();}
+  async function deleteList(kind, id) {
+    const trip = activeTrip();
+    if (!trip) return;
+    if (trip.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    try {
+      await persistLocalFirstOperations([{
+        table: kind === "pack" ? "trip_pack_items" : "trip_todos",
+        method: "delete",
+        filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }]
+      }]);
+      await loadTrips();
+    } catch (e) {
+      console.error("Listeneintrag löschen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Löschen des Listeneintrags");
+      render();
+    }
   }
 
   async function createShareCode(tripId){
