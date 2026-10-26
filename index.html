@@ -417,6 +417,7 @@
   let checking = true;
   let offline = !navigator.onLine;
   let offlineCacheLoaded = false;
+  let offlineCacheUserId = null;
   let offlineSyncInProgress = false;
   let offlineSyncMessage = "";
   let error = "";
@@ -831,7 +832,7 @@
     </div>`;
   }
   function render() {
-    if (offline && (!session || !offlineCacheLoaded)) {
+    if (offline && (!session || !offlineCacheLoaded || offlineCacheUserId !== session.user.id)) {
       root.innerHTML = offlineHTML();
       lucide.createIcons();
       return;
@@ -3618,7 +3619,12 @@
     if (!key) return [];
     try {
       const value = JSON.parse(localStorage.getItem(key) || "[]");
-      return Array.isArray(value) ? value.filter(item => item && item.userId === session.user.id && item.table && item.method) : [];
+      const allowedTables = new Set(["trips", "trip_members", "trip_people", "trip_expenses", "trip_tolls", "trip_pack_items", "trip_todos", "trip_share_codes"]);
+      const allowedMethods = new Set(["upsert", "update", "delete"]);
+      return Array.isArray(value) ? value.filter(item =>
+        item && item.userId === session.user.id && allowedTables.has(item.table) && allowedMethods.has(item.method) &&
+        (!item.filters || Array.isArray(item.filters))
+      ) : [];
     } catch {
       return [];
     }
@@ -3776,6 +3782,7 @@
         selectedTripId, trips
       }));
       offlineCacheLoaded = true;
+      offlineCacheUserId = session.user.id;
       return true;
     } catch (e) {
       console.error("Offline-Cache konnte nicht gespeichert werden:", e);
@@ -3795,6 +3802,7 @@
       if (selectedTripId && !trips.some(trip => trip.id === selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
       offlineCacheLoaded = true;
+      offlineCacheUserId = session.user.id;
       readOfflineQueue().forEach(applyOfflineOperation);
       saveOfflineTripsCache();
       return true;
@@ -3805,7 +3813,9 @@
   }
 
   async function executeOfflineOperation(op) {
+    const allowedTables = new Set(["trips", "trip_members", "trip_people", "trip_expenses", "trip_tolls", "trip_pack_items", "trip_todos", "trip_share_codes"]);
     if (!session?.user?.id || op.userId !== session.user.id) throw new Error("Die gespeicherten Änderungen gehören nicht zu diesem Konto.");
+    if (!allowedTables.has(op.table)) throw new Error("Diese lokale Änderung ist nicht für die Synchronisierung zugelassen.");
     let query = supabase.from(op.table);
     if (op.method === "upsert") {
       const options = { onConflict: op.onConflict || (op.table === "trip_members" ? "trip_id,user_id" : "id") };
@@ -3850,6 +3860,14 @@
     if (!navigator.onLine) {
       await queueOfflineOperations(prepared);
       return { queued: true };
+    }
+
+    if (pendingOfflineOperationCount() && !offlineSyncInProgress) {
+      const earlierChangesSynced = await syncOfflineChanges({ renderAfter: false });
+      if (!earlierChangesSynced) {
+        await queueOfflineOperations(prepared);
+        return { queued: true };
+      }
     }
 
     try {
@@ -5133,7 +5151,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=50").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=51").catch(() => {});
     }, { once: true });
   }
 
