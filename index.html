@@ -831,7 +831,7 @@
     </div>`;
   }
   function render() {
-    if (offline) {
+    if (offline && (!session || !offlineCacheLoaded)) {
       root.innerHTML = offlineHTML();
       lucide.createIcons();
       return;
@@ -2352,6 +2352,7 @@
     return `<div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
       <div class="mx-auto w-full max-w-6xl px-4 pb-32 pt-5 md:px-6 md:pb-32 md:pt-6">
         ${error ? `<div class="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${esc(error)}</div>` : ""}
+        ${offlineStatusHTML()}
         <main id="ua-page-content" class="${animateNextPage ? "ua-page-enter" : ""}">${pageContent}</main>
       </div>
 
@@ -4878,8 +4879,18 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
     owedToExpanded:{get:()=>owedToExpanded,set:v=>{owedToExpanded=!!v}}
   });
 
-  window.addEventListener("online",()=>{offline=false;render();if(session)loadTrips();});
-  window.addEventListener("offline",()=>{offline=true;render();});
+  window.addEventListener("online", async () => {
+    offline = false;
+    if (session) {
+      await syncOfflineChanges({ renderAfter: false });
+      await loadTrips();
+    } else { render(); }
+  });
+  window.addEventListener("offline", () => {
+    offline = true;
+    if (session) restoreOfflineTripsCache();
+    render();
+  });
 
 
   window.addEventListener("beforeinstallprompt", event => {
@@ -4895,7 +4906,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=49").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=50").catch(() => {});
     }, { once: true });
   }
 
