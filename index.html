@@ -3223,6 +3223,30 @@
     }
   }
 
+  async function unshareTripWithFamilyMember(tripId, userId) {
+    const trip = trips.find(item => item.id === tripId && item.role === "owner");
+    const member = familyMembers.find(item => item.user_id === userId && item.user_id !== session?.user?.id);
+    const sharedIds = familySharedTripMemberIds.get(tripId) || new Set();
+    if (!trip || !member || !sharedIds.has(userId) || familySaving) return;
+
+    familySaving = true;
+    familyError = "";
+    familyMessage = "";
+    render();
+    try {
+      const result = await supabase.from("trip_members").delete().eq("trip_id", tripId).eq("user_id", userId);
+      if (result.error) throw result.error;
+      await refreshFamilySharedTripStatus();
+      familyMessage = "Der Zugriff auf „" + trip.name + "“ wurde für " + (member.display_name || "Familienmitglied") + " entfernt.";
+    } catch (e) {
+      console.error("Urlaubsfreigabe für Familienmitglied entfernen fehlgeschlagen:", e);
+      familyError = friendlyAppError(e, "Entfernen der Urlaubsfreigabe");
+    } finally {
+      familySaving = false;
+      render();
+    }
+  }
+
   async function saveFamilyName() {
     if (!family?.id || family.owner_user_id !== session?.user?.id || familySaving) return;
     const name = familyRenameName.trim();
@@ -3458,12 +3482,14 @@
                 ? `<div class="mt-3 space-y-2">${visibleTrips.map(trip => {
                     const alreadyShared = familySharedTripIds.has(trip.id);
                     const sharedIds = familySharedTripMemberIds.get(trip.id) || new Set();
-                    const sharedNames = familyMembers.filter(member => member.user_id !== currentUserId && sharedIds.has(member.user_id)).map(member => member.display_name || "Familienmitglied");
+                    const sharedMembers = familyMembers.filter(member => member.user_id !== currentUserId && sharedIds.has(member.user_id));
+                    const sharedNames = sharedMembers.map(member => member.display_name || "Familienmitglied");
                     return `<div class="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 sm:flex-row sm:items-center">
                       <div class="min-w-0 flex-1">
                         <div class="truncate text-sm font-semibold text-slate-900">${esc(trip.name)}</div>
                         <div class="mt-0.5 truncate text-xs text-slate-500">${esc(trip.destination || "Kein Reiseziel")} · ${shortDate(trip.startDate)} – ${shortDate(trip.endDate)}</div>
-                        <div class="mt-2 text-xs leading-5 ${sharedNames.length ? "text-emerald-700" : "text-slate-400"}">${sharedNames.length ? "Geteilt mit: " + esc(sharedNames.join(", ")) : "Noch mit niemandem aus der Family geteilt"}</div>
+                        <div class="mt-2 text-xs font-medium text-slate-500">${sharedMembers.length ? "Geteilt mit:" : "Noch mit niemandem aus der Family geteilt"}</div>
+                        ${sharedMembers.length ? `<div class="mt-1.5 flex flex-wrap gap-1.5">${sharedMembers.map(member => `<span class="inline-flex max-w-full items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 py-1 pl-2.5 pr-1 text-xs font-medium text-emerald-800"><span class="max-w-[8rem] truncate">${esc(member.display_name || "Familienmitglied")}</span><button type="button" data-action="unshare-family-trip-member" data-trip-id="${esc(trip.id)}" data-user-id="${esc(member.user_id)}" aria-label="${esc("Zugriff für " + (member.display_name || "Familienmitglied") + " auf " + trip.name + " entfernen")}" title="Urlaubszugriff entfernen" class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-emerald-800 transition hover:bg-emerald-100">${icon("x","h-3 w-3")}</button></span>`).join("")}</div>` : ""}
                       </div>
                       <button type="button" data-action="share-trip-family" data-id="${esc(trip.id)}" ${(familySaving || alreadyShared) ? "disabled" : ""} class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${alreadyShared ? "bg-emerald-50 text-emerald-700" : "bg-slate-900 text-white hover:bg-slate-800"} disabled:cursor-default disabled:opacity-90">
                         ${alreadyShared ? icon("check-circle-2","h-4 w-4") : icon("users-round","h-4 w-4")}
@@ -4333,6 +4359,20 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
       if(action==="create-family-invite"){await createFamilyInvite();return;}
       if(action==="copy-family-invite-code"){await copyFamilyInviteCode();return;}
       if(action==="toggle-family-auto-share"){await toggleFamilyAutoShare();return;}
+      if(action==="unshare-family-trip-member"){
+        const trip = trips.find(item => item.id === el.dataset.tripId && item.role === "owner");
+        const member = familyMembers.find(item => item.user_id === el.dataset.userId && item.user_id !== session?.user?.id);
+        const sharedIds = familySharedTripMemberIds.get(el.dataset.tripId) || new Set();
+        if(trip && member && sharedIds.has(member.user_id)){
+          deleteDialog = {
+            label: "Urlaubszugriff entfernen",
+            description: (member.display_name || "Dieses Familienmitglied") + " verliert den Zugriff auf „" + trip.name + "“ und kann diesen Urlaub anschließend nicht mehr sehen oder bearbeiten. Der gemeinsame Zugriff auf genau diesen Urlaub wird aufgehoben.",
+            onConfirm: () => unshareTripWithFamilyMember(trip.id, member.user_id)
+          };
+          render();
+        }
+        return;
+      }
       if(action==="share-trip-family"){await shareTripWithFamily(el.dataset.id);return;}
       if(action==="toggle-family-trip-list"){familyTripsExpanded=!familyTripsExpanded;render();return;}
       if(action==="join-trip"){await joinSharedTrip();return;}
@@ -4523,7 +4563,7 @@ await loadTrips();}catch(e){console.error("Listeneintrag löschen fehlgeschlagen
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=47").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=48").catch(() => {});
     }, { once: true });
   }
 
