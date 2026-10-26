@@ -4103,33 +4103,59 @@
     persistPersonMeta();render();
   }
 
-  async function addEntry(kind){
-    const trip=activeTrip();const form=kind==="expense"?expenseForm:tollForm;
-    if(!trip||!form.title.trim()||!form.amount)return;
-    if(trip.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    try{
+  async function addEntry(kind) {
+    const trip = activeTrip();
+    const form = kind === "expense" ? expenseForm : tollForm;
+    if (!trip || !form.title.trim() || !form.amount) return;
+    if (trip.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    try {
       let category = form.category;
-      if(kind === "expense" && category === "__custom__") category = expenseCustomCategory.trim();
-      if(kind === "expense" && (!category || category === "__custom__")) throw new Error("Bitte eine Kategorie auswählen oder einen Namen eingeben.");
-      if(kind === "expense") category = normalizeExpenseCategory(category) || "Sonstiges";
-      const payload={user_id:session.user.id,trip_id:trip.id,title:form.title.trim(),amount:Number(form.amount),category,person_id:form.personId||null,note:form.note};
-      payload[kind==="expense"?"expense_date":"toll_date"]=form.date||iso();
-      const {error:e}=await supabase.from(kind==="expense"?"trip_expenses":"trip_tolls").insert(payload);if(e)throw e;
+      if (kind === "expense" && category === "__custom__") category = expenseCustomCategory.trim();
+      if (kind === "expense" && (!category || category === "__custom__")) throw new Error("Bitte eine Kategorie auswählen oder einen Namen eingeben.");
+      if (kind === "expense") category = normalizeExpenseCategory(category) || "Sonstiges";
+      const id = localOperationId();
+      const payload = {
+        id, user_id: session.user.id, trip_id: trip.id, title: form.title.trim(),
+        amount: Number(form.amount), category, person_id: form.personId || null, note: form.note || ""
+      };
+      payload[kind === "expense" ? "expense_date" : "toll_date"] = form.date || iso();
+      const table = kind === "expense" ? "trip_expenses" : "trip_tolls";
+      const saved = await persistLocalFirstOperations([{ table, method: "upsert", onConflict: "id", payload }]);
       const entryText = kind === "expense"
-        ? `hat eine Ausgabe hinzugefügt: ${form.title.trim()} · ${money(form.amount)} · ${normalizeExpenseCategory(category)}`
-        : `hat eine Maut hinzugefügt: ${form.title.trim()} · ${money(form.amount)}`;
+        ? "hat eine Ausgabe hinzugefügt: " + form.title.trim() + " · " + money(form.amount) + " · " + normalizeExpenseCategory(category)
+        : "hat eine Maut hinzugefügt: " + form.title.trim() + " · " + money(form.amount);
       const entryIcon = kind === "expense" ? "wallet-cards" : "car-front";
       addActivity(trip.id, entryText, entryIcon);
-      broadcastActivity(trip.id, entryText, entryIcon);
-      if(kind==="expense"){expenseForm=emptyForm("Essen");expenseCustomCategory="";expenseCategorySearch="";expenseCategoryMoreOpen=false;}else tollForm=emptyForm("Maut");
+      if (!saved.queued) broadcastActivity(trip.id, entryText, entryIcon);
+      if (kind === "expense") {
+        expenseForm = emptyForm("Essen"); expenseCustomCategory = ""; expenseCategorySearch = ""; expenseCategoryMoreOpen = false;
+      } else {
+        tollForm = emptyForm("Maut");
+      }
       await loadTrips();
-    }catch(e){console.error("Eintrag speichern fehlgeschlagen:",e);error=friendlyAppError(e,"Speichern des Eintrags");render();}
+    } catch (e) {
+      console.error("Eintrag speichern fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Speichern des Eintrags");
+      render();
+    }
   }
 
-  async function deleteEntry(kind,id){
-    if(activeTrip()?.role==="viewer"){error="Du hast in diesem geteilten Urlaub nur Leserechte.";render();return;}
-    try{const {error:e}=await supabase.from(kind==="expense"?"trip_expenses":"trip_tolls").delete().eq("id",id);if(e)throw e;
-await loadTrips();}catch(e){console.error("Eintrag löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Eintrags");render();}
+  async function deleteEntry(kind, id) {
+    const trip = activeTrip();
+    if (trip?.role === "viewer") { error = "Du hast in diesem geteilten Urlaub nur Leserechte."; render(); return; }
+    if (!trip) return;
+    try {
+      await persistLocalFirstOperations([{
+        table: kind === "expense" ? "trip_expenses" : "trip_tolls",
+        method: "delete",
+        filters: [{ column: "trip_id", value: trip.id }, { column: "id", value: id }]
+      }]);
+      await loadTrips();
+    } catch (e) {
+      console.error("Eintrag löschen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Löschen des Eintrags");
+      render();
+    }
   }
 
   async function addList(kind){
