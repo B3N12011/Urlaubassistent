@@ -3945,66 +3945,86 @@
 
   async function createTrip() {
     if (!newTrip.name.trim()) return;
+    if (!session?.user?.id) { error = "Bitte melde dich an."; render(); return; }
     const shouldAutoShare = Boolean(family?.auto_share_new_trips);
-    let autoShareMessage = "";
-    let autoShareError = "";
+    const tripId = localOperationId();
+    const personId = localOperationId();
+    const name = newTrip.name.trim();
+    const tripPayload = {
+      id: tripId, user_id: session.user.id, name,
+      destination: newTrip.destination.trim(),
+      start_date: newTrip.startDate || iso(),
+      end_date: newTrip.endDate || iso(),
+      budget: Number(newTrip.budget || 0), status: "geplant"
+    };
+    const operations = [
+      { table: "trips", method: "upsert", payload: tripPayload, onConflict: "id" },
+      { table: "trip_members", method: "upsert", payload: { trip_id: tripId, user_id: session.user.id, role: "owner" }, onConflict: "trip_id,user_id", ignoreDuplicates: true },
+      { table: "trip_people", method: "upsert", payload: { id: personId, user_id: session.user.id, trip_id: tripId, name: "Ich" }, onConflict: "id" }
+    ];
     try {
-      const {data,error:insertError} = await supabase.from("trips").insert({user_id:session.user.id,name:newTrip.name.trim(),destination:newTrip.destination.trim(),start_date:newTrip.startDate||iso(),end_date:newTrip.endDate||iso(),budget:Number(newTrip.budget||0),status:"geplant"}).select("*").single();
-      if (insertError) throw insertError;
-      if (data?.id) {
-        const member = await supabase.from("trip_members").upsert({trip_id:data.id,user_id:session.user.id,role:"owner"},{onConflict:"trip_id,user_id",ignoreDuplicates:true});
-        if (member.error) throw member.error;
-        const person = await supabase.from("trip_people").insert({user_id:session.user.id,trip_id:data.id,name:"Ich"});
-        if (person.error) throw person.error;
-        addActivity(data.id,`hat den Urlaub „${data.name}“ erstellt`,"map");
-        broadcastActivity(data.id,`hat den Urlaub „${data.name}“ erstellt`,"map");
-
-        if (shouldAutoShare) {
-          try {
-            const shareResult = await supabase.rpc("share_trip_with_family", { p_trip_id: data.id });
-            if (shareResult.error) throw shareResult.error;
-            const addedCount = Number(shareResult.data || 0);
-            autoShareMessage = addedCount > 0
-              ? `Der neue Urlaub „${data.name}“ wurde mit ${addedCount} Familienmitglied${addedCount === 1 ? "" : "ern"} geteilt.`
-              : (familyMembers.filter(member => member.user_id !== session.user.id).length
-                  ? `Der Urlaub „${data.name}“ ist bereits mit allen Familienmitgliedern geteilt.`
-                  : "Der Urlaub wurde erstellt. Sobald weitere Familienmitglieder beitreten, können sie diesen Urlaub ebenfalls erhalten.");
-          } catch (shareError) {
-            console.error("Automatisches Family-Teilen fehlgeschlagen:", shareError);
-            autoShareError = "Der Urlaub wurde erstellt, aber nicht automatisch mit der Family geteilt. Du kannst ihn unten unter „Bestehende Urlaube teilen“ freigeben.";
-          }
+      const saved = await persistLocalFirstOperations(operations);
+      newTrip = { name: "", destination: "", startDate: "", endDate: "", budget: "" };
+      selectedTripId = tripId;
+      localStorage.setItem(K.trip, selectedTripId);
+      daySelected = iso();
+      addActivity(tripId, "hat den Urlaub „" + name + "“ erstellt", "map");
+      let autoShareMessage = "";
+      let autoShareError = "";
+      if (shouldAutoShare && !saved.queued) {
+        try {
+          const shareResult = await supabase.rpc("share_trip_with_family", { p_trip_id: tripId });
+          if (shareResult.error) throw shareResult.error;
+          const addedCount = Number(shareResult.data || 0);
+          autoShareMessage = addedCount > 0
+            ? "Der neue Urlaub „" + name + "“ wurde mit " + addedCount + " Familienmitglied" + (addedCount === 1 ? "" : "ern") + " geteilt."
+            : (familyMembers.filter(member => member.user_id !== session.user.id).length
+                ? "Der Urlaub „" + name + "“ ist bereits mit allen Familienmitgliedern geteilt."
+                : "Der Urlaub wurde erstellt. Sobald weitere Familienmitglieder beitreten, können sie diesen Urlaub ebenfalls erhalten.");
+        } catch (shareError) {
+          console.error("Automatisches Family-Teilen fehlgeschlagen:", shareError);
+          autoShareError = "Der Urlaub wurde erstellt, aber nicht automatisch mit der Family geteilt. Du kannst ihn unten unter „Bestehende Urlaube teilen“ freigeben.";
         }
+      } else if (shouldAutoShare && saved.queued) {
+        familyMessage = "Der Urlaub ist lokal gespeichert. Automatisches Family-Teilen braucht Internet; teile ihn nach der Synchronisierung im Family-Bereich.";
+        familyError = "";
       }
-      newTrip={name:"",destination:"",startDate:"",endDate:"",budget:""};
-      selectedTripId=data?.id||null;
-      daySelected=iso();
+      if (!saved.queued) broadcastActivity(tripId, "hat den Urlaub „" + name + "“ erstellt", "map");
       await loadTrips();
       if (autoShareError) { familyError = autoShareError; familyMessage = ""; }
       else if (autoShareMessage) { familyMessage = autoShareMessage; familyError = ""; }
-      if (autoShareError || autoShareMessage) render();
-    } catch(e) { console.error("Urlaub erstellen fehlgeschlagen:", e); error=friendlyAppError(e, "Erstellen des Urlaubs"); render(); }
+      if (autoShareError || autoShareMessage || (shouldAutoShare && saved.queued)) render();
+    } catch (e) {
+      console.error("Urlaub erstellen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Erstellen des Urlaubs");
+      render();
+    }
   }
 
   async function deleteTrip(id) {
     try {
-      const trip=trips.find(t=>t.id===id);
-      if(!trip || trip.role!=="owner") throw new Error("Nur der Besitzer kann diesen Urlaub löschen.");
-      const reqs=[
-        supabase.from("trip_expenses").delete().eq("trip_id",id),
-        supabase.from("trip_tolls").delete().eq("trip_id",id),
-        supabase.from("trip_pack_items").delete().eq("trip_id",id),
-        supabase.from("trip_todos").delete().eq("trip_id",id),
-        supabase.from("trip_people").delete().eq("trip_id",id),
-        supabase.from("trip_share_codes").delete().eq("trip_id",id),
-        supabase.from("trip_members").delete().eq("trip_id",id),
-        supabase.from("trips").delete().eq("id",id)
+      const trip = trips.find(item => item.id === id);
+      if (!trip || trip.role !== "owner") throw new Error("Nur der Besitzer kann diesen Urlaub löschen.");
+      const operations = [
+        { table: "trip_expenses", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_tolls", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_pack_items", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_todos", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_people", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_share_codes", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trip_members", method: "delete", filters: [{ column: "trip_id", value: id }] },
+        { table: "trips", method: "delete", filters: [{ column: "id", value: id }] }
       ];
-      for(const r of reqs){const {error:e}=await r;if(e)throw e;}
-      selectedTripId=null;
-      selectedPersonId=null;
-      localStorage.removeItem(`urlaubassistent-person-meta-${id}`);
+      await persistLocalFirstOperations(operations);
+      selectedTripId = null;
+      selectedPersonId = null;
+      localStorage.removeItem("urlaubassistent-person-meta-" + id);
       await loadTrips();
-    } catch(e){console.error("Urlaub löschen fehlgeschlagen:",e);error=friendlyAppError(e,"Löschen des Urlaubs");render();}
+    } catch (e) {
+      console.error("Urlaub löschen fehlgeschlagen:", e);
+      error = friendlyAppError(e, "Löschen des Urlaubs");
+      render();
+    }
   }
 
   async function addPerson(){
