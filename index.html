@@ -4572,8 +4572,10 @@
     }
     try {
       if (oldName !== newName) {
-        const { error: updateError } = await supabase.from("trip_expenses").update({ category: newName }).eq("trip_id", trip.id).eq("category", oldName);
-        if (updateError) throw updateError;
+        await persistLocalFirstOperations([{
+          table: "trip_expenses", method: "update", payload: { category: newName },
+          filters: [{ column: "trip_id", value: trip.id }, { column: "category", value: oldName }]
+        }]);
       }
       saveCustomExpenseCategories(trip.id, existing.map(c => c === oldName ? newName : c));
       if (expenseForm.category === oldName) expenseForm.category = newName;
@@ -4597,8 +4599,10 @@
     const confirmed = window.confirm(`Eigene Kategorie „${oldName}“ wirklich löschen? Bereits gespeicherte Ausgaben dieser Kategorie werden zu „Sonstiges“.`);
     if (!confirmed) return;
     try {
-      const { error: updateError } = await supabase.from("trip_expenses").update({ category: "Sonstiges" }).eq("trip_id", trip.id).eq("category", oldName);
-      if (updateError) throw updateError;
+      await persistLocalFirstOperations([{
+        table: "trip_expenses", method: "update", payload: { category: "Sonstiges" },
+        filters: [{ column: "trip_id", value: trip.id }, { column: "category", value: oldName }]
+      }]);
       const remaining = customExpenseCategories(trip).filter(c => c !== oldName);
       saveCustomExpenseCategories(trip.id, remaining);
       if (expenseForm.category === oldName) expenseForm.category = "Sonstiges";
