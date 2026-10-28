@@ -81,6 +81,7 @@
       .modal-backdrop, .modal-backdrop > div { animation: none !important; }
       nav button, nav button span:first-child, button[data-action],
       main#ua-page-content section { transition: none !important; }
+      .ua-nav-indicator-moving, .ua-nav-icon-pop, .ua-nav-indicator-moving::after { animation: none !important; }
     }
     .person-dark-input {
       background: rgba(255, 255, 255, 0.07) !important;
@@ -130,6 +131,44 @@
       backdrop-filter: blur(18px) saturate(135%);
       -webkit-backdrop-filter: blur(18px) saturate(135%);
     }
+    .ua-nav-track { position: relative; isolation: isolate; }
+    .ua-nav-indicator {
+      position: absolute; z-index: 0; top: 0; bottom: 0; left: 0;
+      border-radius: 1rem; background: #0f172a;
+      box-shadow: 0 8px 20px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.08);
+      pointer-events: none; overflow: hidden;
+    }
+    .ua-nav-indicator::after {
+      content: ""; position: absolute; top: -80%; bottom: -80%; left: -50%; width: 42%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
+      transform: skewX(-18deg); opacity: 0;
+    }
+    .ua-nav-indicator-moving { animation: ua-nav-sweep 470ms cubic-bezier(.18,.72,.25,1) both; will-change: transform; }
+    .ua-nav-indicator-moving::after { opacity: 1; animation: ua-nav-sheen 470ms ease-out both; }
+    .ua-nav-item {
+      position: relative; z-index: 1; display: flex; min-width: 0; flex: 1;
+      flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
+      border-radius: 1rem; padding: .5rem .5rem; background: transparent;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 200ms ease, transform 220ms cubic-bezier(.2,.75,.25,1);
+    }
+    .ua-nav-item:active { transform: scale(.96); }
+    .ua-nav-icon { transition: transform 220ms cubic-bezier(.2,.75,.25,1), background-color 220ms ease; }
+    .ua-nav-icon-pop { animation: ua-nav-icon-pop 420ms cubic-bezier(.18,.72,.25,1) both; }
+    @keyframes ua-nav-sweep {
+      0% { transform: var(--ua-nav-from) scale(.96); filter: brightness(.94); }
+      56% { transform: var(--ua-nav-to) scale(1.035); filter: brightness(1.08); }
+      76% { transform: var(--ua-nav-to) scale(.99); filter: brightness(1.01); }
+      100% { transform: var(--ua-nav-to) scale(1); filter: brightness(1); }
+    }
+    @keyframes ua-nav-sheen { 0% { left: -50%; opacity: 0; } 28% { opacity: 1; } 100% { left: 125%; opacity: 0; } }
+    @keyframes ua-nav-icon-pop {
+      0% { transform: scale(.76) translateY(2px); }
+      58% { transform: scale(1.12) translateY(-1px); }
+      78% { transform: scale(.96); }
+      100% { transform: scale(1); }
+    }
+
 
     .ai-thinking-card {
       position: relative;
@@ -398,6 +437,7 @@
     reminders: "urlaubassistent-reminders-enabled",
     passportReminder: "urlaubassistent-passport-reminder",
     departureReminder: "urlaubassistent-departure-reminder",
+    packingReminder: "urlaubassistent-packing-reminder",
     activityPrefix: "urlaubassistent-activity-",
     checklistPrefix: "urlaubassistent-trip-check-",
     reminderSentPrefix: "urlaubassistent-reminder-sent-",
@@ -431,6 +471,8 @@
   let remindersEnabled = localStorage.getItem(K.reminders) !== "false";
   let passportReminderEnabled = localStorage.getItem(K.passportReminder) !== "false";
   let departureReminderEnabled = localStorage.getItem(K.departureReminder) !== "false";
+  let packingReminderEnabled = localStorage.getItem(K.packingReminder) !== "false";
+  let reminderCheckInProgress = false;
   let activityExpanded = false;
   let reminderMessage = "";
   let settingsOpen = false;
@@ -512,6 +554,7 @@
   const VALID_PAGES = ["overview", "trips", "expenses", "people", "more"];
   let activePage = localStorage.getItem(PAGE_KEY) || "overview";
   let animateNextPage = true;
+  let navTransitionFromPage = null;
   if (!VALID_PAGES.includes(activePage)) activePage = "overview";
 
   let deleteDialog = null;
@@ -733,33 +776,91 @@
 
   function reminderSentKey(tripId, type, day) { return `${K.reminderSentPrefix}${tripId}-${type}-${day}`; }
 
-  function sendBrowserNotification(title, body) {
+  async function sendBrowserNotification(title, body, tag = "urlaubassistent-reminder") {
     try {
       if (typeof Notification === "undefined" || Notification.permission !== "granted") return false;
-      new Notification(title, {body});
+      if ("serviceWorker" in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          if (registration?.showNotification) {
+            await registration.showNotification(title, {
+              body,
+              icon: "./icon-192.png",
+              badge: "./icon-192.png",
+              tag,
+              renotify: false,
+              data: { url: "./" }
+            });
+            return true;
+          }
+        } catch (error) {
+          console.warn("Service-Worker-Benachrichtigung nicht verfügbar:", error);
+        }
+      }
+      new Notification(title, { body, icon: "./icon-192.png", tag });
       return true;
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   }
 
-  function checkReminders() {
-    if (!session || !remindersEnabled || typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    const trip = activeTrip();
-    if (!trip) return;
-    const data = tripCheckData(trip);
-    const today = iso();
-    if (passportReminderEnabled && data.days !== null && [14,7,3,1,0].includes(data.days) && !data.checklist.documents) {
-      const key = reminderSentKey(trip.id, "passport", today);
-      if (localStorage.getItem(key) !== "1") {
-        sendBrowserNotification("Urlaubassistent", data.days === 0 ? "Heute geht es los. Sind Ausweis oder Reisepass schon bereit?" : `Noch ${data.days} ${data.days === 1 ? "Tag" : "Tage"} bis zur Abreise. Denk an Ausweis oder Reisepass.`);
-        localStorage.setItem(key, "1");
+  async function checkReminders() {
+    if (reminderCheckInProgress || !session || !remindersEnabled ||
+        typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const upcomingTrips = trips
+      .filter(trip => trip?.id && trip.startDate && daysUntil(trip.startDate) >= 0)
+      .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+    if (!upcomingTrips.length) return;
+
+    reminderCheckInProgress = true;
+    try {
+      const now = new Date();
+      const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+      for (const trip of upcomingTrips) {
+        const data = tripCheckData(trip);
+        const days = data.days;
+        const tripName = String(trip.name || trip.destination || "Dein Urlaub");
+        const packOpen = (trip.packlist || []).filter(item => !item.done).length;
+        const todoOpen = (trip.todos || []).filter(item => !item.done).length;
+
+        if (passportReminderEnabled && days !== null && [14, 7, 3, 1, 0].includes(days) && !data.checklist.documents) {
+          const key = reminderSentKey(trip.id, "passport", today);
+          if (localStorage.getItem(key) !== "1") {
+            const body = days === 0
+              ? "Heute geht es los. Sind Ausweis oder Reisepass schon bereit?"
+              : "Noch " + days + " " + (days === 1 ? "Tag" : "Tage") + " bis zur Abreise. Denk an Ausweis oder Reisepass.";
+            const sent = await sendBrowserNotification("Ausweis-Check · " + tripName, body, "ua-" + trip.id + "-passport-" + today);
+            if (sent) localStorage.setItem(key, "1");
+          }
+        }
+
+        if (packingReminderEnabled && days !== null && [7, 3].includes(days) && (packOpen + todoOpen) > 0) {
+          const key = reminderSentKey(trip.id, "packing", today);
+          if (localStorage.getItem(key) !== "1") {
+            const pieces = [];
+            if (packOpen) pieces.push(packOpen + " " + (packOpen === 1 ? "Punkt" : "Punkte") + " auf der Packliste");
+            if (todoOpen) pieces.push(todoOpen + " " + (todoOpen === 1 ? "Aufgabe" : "Aufgaben"));
+            const sent = await sendBrowserNotification("Reisevorbereitung · " + tripName, "Noch offen: " + pieces.join(" und ") + ". Schau kurz in deine Checkliste.", "ua-" + trip.id + "-packing-" + today);
+            if (sent) localStorage.setItem(key, "1");
+          }
+        }
+
+        if (departureReminderEnabled && days === 1) {
+          const openChecklist = data.total - data.done;
+          const totalOpen = openChecklist + packOpen + todoOpen;
+          const key = reminderSentKey(trip.id, "departure", today);
+          if (totalOpen > 0 && localStorage.getItem(key) !== "1") {
+            const sent = await sendBrowserNotification(
+              "Morgen geht's los · " + tripName,
+              "Noch " + totalOpen + " " + (totalOpen === 1 ? "Punkt ist" : "Punkte sind") + " offen. Prüfe Reise-Check, Packliste und To-dos.",
+              "ua-" + trip.id + "-departure-" + today
+            );
+            if (sent) localStorage.setItem(key, "1");
+          }
+        }
       }
-    }
-    if (departureReminderEnabled && data.days === 1 && data.done < data.total) {
-      const key = reminderSentKey(trip.id, "departure", today);
-      if (localStorage.getItem(key) !== "1") {
-        sendBrowserNotification("Abreise-Check", `Noch ${data.total-data.done} wichtige Punkte offen. Ist alles fertig?`);
-        localStorage.setItem(key, "1");
-      }
+    } finally {
+      reminderCheckInProgress = false;
     }
   }
 
@@ -868,6 +969,7 @@
 
     root.innerHTML = appHTML() + pwaInstallButtonHTML();
     animateNextPage = false;
+    navTransitionFromPage = null;
     lucide.createIcons();
     checkReminders();
   }
@@ -1092,10 +1194,25 @@
     return titles[activePage] || titles.overview;
   }
 
+  function navIndex(page) {
+    const order = ["overview", "trips", "expenses", "people", "more"];
+    const index = order.indexOf(page);
+    return index < 0 ? 0 : index;
+  }
+
+  function navIndicatorHTML() {
+    const currentIndex = navIndex(activePage);
+    const fromIndex = navTransitionFromPage === null ? currentIndex : navIndex(navTransitionFromPage);
+    const moving = navTransitionFromPage !== null && fromIndex !== currentIndex;
+    const translate = index => index === 0 ? "translateX(0)" : "translateX(calc(" + (index * 100) + "% + " + (index * 4) + "px))";
+    return '<span aria-hidden="true" class="ua-nav-indicator ' + (moving ? "ua-nav-indicator-moving" : "") + '" style="width:calc((100% - 16px) / 5);--ua-nav-from:' + translate(fromIndex) + ';--ua-nav-to:' + translate(currentIndex) + ';transform:' + translate(currentIndex) + '"></span>';
+  }
+
   function navItemHTML(page, iconName, label) {
     const active = activePage === page;
-    return '<button type="button" data-action="navigate" data-page="' + page + '" class="group flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 transition ' + (active ? "bg-slate-900 text-white shadow-sm" : "text-slate-500 hover:bg-white/75 hover:text-slate-900") + '">' +
-      '<span class="flex h-9 w-9 items-center justify-center rounded-xl ' + (active ? "bg-white/10 text-white" : "bg-transparent") + '">' + icon(iconName, "h-5 w-5") + '</span>' +
+    const pop = active && navTransitionFromPage !== null && navTransitionFromPage !== page;
+    return '<button type="button" data-action="navigate" data-page="' + page + '" aria-current="' + (active ? "page" : "false") + '" class="ua-nav-item ' + (active ? "text-white" : "text-slate-500 hover:text-slate-900") + '">' +
+      '<span class="ua-nav-icon flex h-9 w-9 items-center justify-center rounded-xl ' + (active ? "bg-white/10 text-white " + (pop ? "ua-nav-icon-pop" : "") : "bg-transparent") + '">' + icon(iconName, "h-5 w-5") + '</span>' +
       '<span class="text-[11px] font-semibold leading-none">' + label + '</span></button>';
   }
 
@@ -1697,13 +1814,15 @@
         <div class="mt-4 space-y-2">${todoVisible.length?todoVisible.map(item=>listItemHTML(item,"todo")).join(""):emptyHTML("Noch keine To-dos angelegt.")}</div>
         ${trip.todos.length>LIST_LIMIT?moreButtonHTML("todo",todoExpanded):""}
       `)}
-      ${cardHTML("Erinnerungen","Deine Reise meldet sich rechtzeitig","bell-ring",`
+      ${cardHTML("Erinnerungen","Reise-Checks für alle bevorstehenden Urlaube","bell-ring",`
         <div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><div class="flex items-center justify-between gap-4"><div><div class="text-sm font-semibold text-slate-900">Reiseerinnerungen</div><div class="mt-1 text-xs text-slate-500">${esc(notificationStatusText())}</div></div><button type="button" data-action="toggle-reminders" aria-label="Erinnerungen ${remindersEnabled?"ausschalten":"einschalten"}" class="relative h-7 w-12 rounded-full transition ${remindersEnabled?"bg-slate-900":"bg-slate-300"}"><span class="absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${remindersEnabled?"left-6":"left-1"}"></span></button></div></div>
         <div class="mt-3 space-y-2">
           <button type="button" data-action="toggle-passport-reminder" class="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:bg-slate-50"><span class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">${icon("id-card","h-4 w-4")}</span><span><span class="block text-sm font-medium text-slate-800">Ausweis / Reisepass</span><span class="block text-xs text-slate-400">Vor der Abreise erinnern</span></span></span><span class="text-xs font-semibold ${passportReminderEnabled?"text-slate-900":"text-slate-400"}">${passportReminderEnabled?"Ein":"Aus"}</span></button>
           <button type="button" data-action="toggle-departure-reminder" class="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:bg-slate-50"><span class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">${icon("clipboard-check","h-4 w-4")}</span><span><span class="block text-sm font-medium text-slate-800">Abreise-Check</span><span class="block text-xs text-slate-400">Kurz vorher fragen: Ist alles fertig?</span></span></span><span class="text-xs font-semibold ${departureReminderEnabled?"text-slate-900":"text-slate-400"}">${departureReminderEnabled?"Ein":"Aus"}</span></button>
+          <button type="button" data-action="toggle-packing-reminder" class="flex w-full items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left hover:bg-slate-50"><span class="flex items-center gap-3"><span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-700">${icon("luggage","h-4 w-4")}</span><span><span class="block text-sm font-medium text-slate-800">Packliste & To-dos</span><span class="block text-xs text-slate-400">7 und 3 Tage vorher an offene Punkte erinnern</span></span></span><span class="text-xs font-semibold ${packingReminderEnabled?"text-slate-900":"text-slate-400"}">${packingReminderEnabled?"Ein":"Aus"}</span></button>
         </div>
         <div class="mt-3 grid gap-2 sm:grid-cols-2">${buttonHTML(`${icon("bell","h-4 w-4")} Handy-Benachrichtigungen aktivieren`,`data-action="enable-notifications"`,"soft")}${buttonHTML(`${icon("send","h-4 w-4")} Erinnerung testen`,`data-action="test-reminder"`,"soft")}</div>
+        <p class="mt-3 text-xs leading-5 text-slate-400">Die App prüft Erinnerungen beim Öffnen, beim Zurückkehren und solange sie aktiv ist. Für zuverlässige Benachrichtigungen bei vollständig geschlossener App ist ein zusätzlicher Push-Dienst erforderlich.</p>
         ${reminderMessage?`<div class="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">${esc(reminderMessage)}</div>`:""}
       `)}
       ${cardHTML("Neue Einträge","Neue Einträge im gemeinsamen Urlaub","activity",`
@@ -2452,7 +2571,8 @@
       </div>
 
       <nav class="glass-nav fixed bottom-0 left-0 right-0 z-40 px-3 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2">
-        <div class="mx-auto grid max-w-xl grid-cols-5 gap-1">
+        <div class="ua-nav-track mx-auto grid max-w-xl grid-cols-5 gap-1">
+          ${navIndicatorHTML()}
           ${navItemHTML("overview", "layout-dashboard", "Übersicht")}
           ${navItemHTML("trips", "map", "Urlaube")}
           ${navItemHTML("expenses", "wallet-cards", "Ausgaben")}
@@ -4890,7 +5010,10 @@
       if(action==="navigate"){
         const page=el.dataset.page;
         if(VALID_PAGES.includes(page)){
-          if (page !== activePage) animateNextPage = true;
+          if (page !== activePage) {
+            animateNextPage = true;
+            navTransitionFromPage = activePage;
+          }
           activePage=page;
           localStorage.setItem(PAGE_KEY,activePage);
           readInputs();
@@ -4989,7 +5112,7 @@
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
-      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){const nextPage=el.dataset.page||"more";if(nextPage!==activePage)animateNextPage=true;activePage=nextPage;localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
+      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){const nextPage=el.dataset.page||"more";if(nextPage!==activePage){animateNextPage=true;navTransitionFromPage=activePage;}activePage=nextPage;localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
@@ -5181,13 +5304,17 @@
       if(action==="toggle-departure-reminder"){
         departureReminderEnabled=!departureReminderEnabled; localStorage.setItem(K.departureReminder,String(departureReminderEnabled)); render(); return;
       }
+      if(action==="toggle-packing-reminder"){
+        packingReminderEnabled=!packingReminderEnabled; localStorage.setItem(K.packingReminder,String(packingReminderEnabled)); render(); return;
+      }
       if(action==="enable-notifications"){requestNotificationPermission();return;}
       if(action==="test-reminder"){
         if(typeof Notification==="undefined"){reminderMessage="Dieser Browser unterstützt keine Benachrichtigungen.";render();return;}
         if(Notification.permission!=="granted"){requestNotificationPermission();return;}
-        const check=tripCheckData(activeTrip());
+        const trip=activeTrip();
+        const check=trip ? tripCheckData(trip) : {total:0,done:0};
         const openCount=check.total-check.done;
-        const sent=sendBrowserNotification("Urlaubassistent",openCount?`Noch ${openCount} Punkte im Reise-Check offen.`:"Der Reise-Check ist vollständig erledigt.");
+        const sent=await sendBrowserNotification("Urlaubassistent",trip ? (openCount ? "Noch " + openCount + " Punkte im Reise-Check für " + trip.name + " offen." : "Der Reise-Check für " + trip.name + " ist vollständig erledigt.") : "Die Benachrichtigungen sind eingerichtet.", "ua-reminder-test");
         reminderMessage=sent?"Testbenachrichtigung wurde gesendet.":"Die Benachrichtigung konnte nicht gesendet werden."; render(); return;
       }
       if(action==="toggle-more"){
@@ -5234,6 +5361,7 @@
     offline = false;
     if (session) {
       await resumeOfflineSyncIfNeeded(true);
+      checkReminders();
     } else {
       render();
     }
@@ -5252,10 +5380,16 @@
     resumeOfflineSyncIfNeeded();
   }
 
-  window.addEventListener("focus", retryOfflineSyncOnResume);
+  window.addEventListener("focus", () => {
+    retryOfflineSyncOnResume();
+    checkReminders();
+  });
   window.addEventListener("pageshow", retryOfflineSyncOnResume);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") retryOfflineSyncOnResume();
+    if (document.visibilityState === "visible") {
+      retryOfflineSyncOnResume();
+      checkReminders();
+    }
   });
 
   window.addEventListener("beforeinstallprompt", event => {
@@ -5271,7 +5405,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=55").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=56").catch(() => {});
     }, { once: true });
   }
 
