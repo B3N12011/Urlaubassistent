@@ -3924,6 +3924,7 @@
     const renderAfter = options.renderAfter !== false;
     if (!session?.user?.id || !navigator.onLine || offlineSyncInProgress) return false;
     if (!pendingOfflineOperationCount()) {
+      clearOfflineSyncRetry(true);
       offlineSyncMessage = "";
       return true;
     }
@@ -3953,6 +3954,7 @@
       }
       const remaining = pendingOfflineOperationCount();
       if (!remaining) {
+        clearOfflineSyncRetry(true);
         offline = false;
         offlineSyncMessage = "";
         saveOfflineTripsCache();
@@ -5244,18 +5246,17 @@
   });
 
   // If the app was suspended while the connection returned, retry on resume.
-  window.addEventListener("focus", () => {
-    if (session && navigator.onLine) resumeOfflineSyncIfNeeded();
-  });
-  window.addEventListener("pageshow", () => {
-    if (session && navigator.onLine) resumeOfflineSyncIfNeeded();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && session && navigator.onLine) {
-      resumeOfflineSyncIfNeeded();
-    }
-  });
+  function retryOfflineSyncOnResume() {
+    if (!session || !navigator.onLine) return;
+    clearOfflineSyncRetry(true);
+    resumeOfflineSyncIfNeeded();
+  }
 
+  window.addEventListener("focus", retryOfflineSyncOnResume);
+  window.addEventListener("pageshow", retryOfflineSyncOnResume);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") retryOfflineSyncOnResume();
+  });
 
   window.addEventListener("beforeinstallprompt", event => {
     event.preventDefault();
@@ -5270,7 +5271,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=54").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=55").catch(() => {});
     }, { once: true });
   }
 
