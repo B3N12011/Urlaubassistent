@@ -514,7 +514,7 @@
   const DEMO_DATA_KEY = "urlaubassistent-demo-data-v1";
   const DEMO_SELECTED_TRIP_KEY = "urlaubassistent-demo-selected-trip";
   const DEMO_LOCKED_ACTIONS = new Set([
-    "create-trip", "delete-trip", "share-trip", "join-trip", "copy-share-code",
+    "delete-trip", "share-trip", "join-trip", "copy-share-code",
     "add-person", "delete-person", "add-expense", "add-expense-custom-category", "add-toll",
     "add-pack", "add-todo", "delete-entry", "delete-list", "add-debt", "delete-debt",
     "save-person-budget", "save-custom-category", "delete-custom-category",
@@ -3037,7 +3037,10 @@
         { id: "demo-exp-1", title: "Ferienwohnung – Anzahlung", amount: 540, category: "Unterkunft", personId: me.id, date: demoDateOffset(2), note: "Beispielausgabe" },
         { id: "demo-exp-2", title: "Zugtickets", amount: 268.5, category: "Anreise", personId: sam.id, date: demoDateOffset(3), note: "" },
         { id: "demo-exp-3", title: "Reiseversicherung", amount: 64.9, category: "Versicherung", personId: alex.id, date: demoDateOffset(4), note: "" },
-        { id: "demo-exp-4", title: "Reiseführer", amount: 22.95, category: "Aktivitäten", personId: me.id, date: demoDateOffset(5), note: "" }
+        { id: "demo-exp-4", title: "Reiseführer", amount: 22.95, category: "Aktivitäten", personId: me.id, date: demoDateOffset(5), note: "" },
+        { id: "demo-exp-5", title: "Museumstickets", amount: 48, category: "Aktivitäten", personId: me.id, date: demoDateOffset(6), note: "Beispielausgabe" },
+        { id: "demo-exp-6", title: "Abendessen", amount: 72.4, category: "Essen", personId: sam.id, date: demoDateOffset(7), note: "Beispielausgabe" },
+        { id: "demo-exp-7", title: "Parkplatz", amount: 18, category: "Sonstiges", personId: alex.id, date: demoDateOffset(8), note: "Beispielausgabe" }
       ],
       tolls: [
         { id: "demo-toll-1", title: "Mautbudget", amount: 35, category: "Maut", personId: me.id, date: startDate, note: "Beispiel" }
@@ -3135,6 +3138,9 @@
   }
 
   function demoGateMessage(action) {
+    if (action === "create-trip") {
+      return "In der Demo kannst du einen eigenen Urlaub anlegen. Für weitere Urlaube und die vollständige Verwaltung deiner Reisen brauchst du ein kostenloses Konto.";
+    }
     if (action.includes("family") || action.includes("invite") || action === "leave-family" || action === "remove-family-member") {
       return "Family-Einladungen, Mitgliedschaften und gemeinsame Urlaube benötigen ein Konto, damit alle Freigaben sicher deinem Nutzer zugeordnet werden können.";
     }
@@ -4716,7 +4722,54 @@
   }
 
   async function createTrip() {
-    if (!newTrip.name.trim()) return;
+    if (!newTrip.name.trim()) {
+      error = "Gib deinem Urlaub zuerst einen Namen.";
+      render();
+      return;
+    }
+    if (demoMode) {
+      if (trips.some(item => item.demoUserCreated)) {
+        demoGateReason = demoGateMessage("create-trip");
+        demoGateOpen = true;
+        render();
+        return;
+      }
+      const demoTripId = "demo-trip-user-" + localOperationId();
+      const demoPersonId = "demo-person-user-" + localOperationId();
+      const personalTrip = {
+        id: demoTripId,
+        name: newTrip.name.trim().slice(0, 100),
+        destination: String(newTrip.destination || "").trim().slice(0, 120),
+        startDate: newTrip.startDate || iso(),
+        endDate: newTrip.endDate || newTrip.startDate || iso(),
+        budget: Math.max(0, Number(newTrip.budget || 0)),
+        status: "geplant",
+        people: [{ id: demoPersonId, name: "Du" }],
+        expenses: [],
+        tolls: [],
+        packlist: [],
+        todos: [],
+        role: "owner",
+        shared: false,
+        demoUserCreated: true
+      };
+      const previousTrips = trips;
+      trips = [personalTrip];
+      if (!saveDemoTrips()) {
+        trips = previousTrips;
+        error = "Der Urlaub konnte nicht lokal gespeichert werden. Prüfe den Gerätespeicher und versuche es erneut.";
+        render();
+        return;
+      }
+      newTrip = { name: "", destination: "", startDate: "", endDate: "", budget: "" };
+      selectedTripId = demoTripId;
+      localStorage.setItem(DEMO_SELECTED_TRIP_KEY, demoTripId);
+      daySelected = personalTrip.startDate;
+      error = "";
+      addActivity(demoTripId, "hat den Demo-Urlaub " + personalTrip.name + " erstellt", "map");
+      render();
+      return;
+    }
     if (!session?.user?.id) { error = "Bitte melde dich an."; render(); return; }
     const shouldAutoShare = Boolean(family?.auto_share_new_trips);
     const tripId = localOperationId();
@@ -5777,6 +5830,21 @@
         const target=el.dataset.target;
         const map={trips:"tripsExpanded",people:"peopleExpanded",expenses:"expensesExpanded",tolls:"tollsExpanded",day:"dayExpanded",pack:"packExpanded",todo:"todoExpanded",personExpenses:"personExpensesExpanded",owes:"owesExpanded",owedTo:"owedToExpanded",activity:"activityExpanded"};
         const prop=map[target];
+        const expandedState = {trips:tripsExpanded,people:peopleExpanded,expenses:expensesExpanded,tolls:tollsExpanded,day:dayExpanded,pack:packExpanded,todo:todoExpanded,personExpenses:personExpensesExpanded,owes:owesExpanded,owedTo:owedToExpanded,activity:activityExpanded};
+        const currentlyExpanded = Boolean(expandedState[target]);
+        if (demoMode && !currentlyExpanded && ["expenses","tolls","day","personExpenses"].includes(target)) {
+          const trip = activeTrip();
+          const count = target === "expenses" ? (trip?.expenses?.length || 0)
+            : target === "tolls" ? (trip?.tolls?.length || 0)
+            : target === "day" ? dayItems().length
+            : (selectedPerson ? (selectedPerson.expenses?.length || 0) : 0);
+          if (count > LIST_LIMIT) {
+            demoGateReason = "In der kostenlosen Demo siehst du höchstens fünf Einträge auf einmal. Melde dich an oder erstelle ein kostenloses Konto, um die vollständigen Ausgabendetails zu sehen.";
+            demoGateOpen = true;
+            render();
+            return;
+          }
+        }
         if(prop==="tripsExpanded")tripsExpanded=!tripsExpanded;
         if(prop==="peopleExpanded")peopleExpanded=!peopleExpanded;
         if(prop==="expensesExpanded")expensesExpanded=!expensesExpanded;
@@ -5867,7 +5935,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=60").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=61").catch(() => {});
     }, { once: true });
   }
 
