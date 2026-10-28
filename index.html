@@ -1033,7 +1033,7 @@
     </div>`;
   }
   function render() {
-    if (offline && (!session || !offlineCacheLoaded || offlineCacheUserId !== session.user.id)) {
+    if (offline && !demoMode && (!session || !offlineCacheLoaded || offlineCacheUserId !== session.user.id)) {
       root.innerHTML = offlineHTML();
       lucide.createIcons();
       return;
@@ -1051,7 +1051,9 @@
       return;
     }
 
-    if (!session) {
+    if (!session && demoMode && !trips.length) loadDemoTrips();
+
+    if (!session && !demoMode) {
       root.innerHTML = authHTML() + pwaInstallButtonHTML();
       lucide.createIcons();
       return;
@@ -1203,6 +1205,10 @@
               <span class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/80">${icon("wallet-cards", "h-3.5 w-3.5")} Ausgaben</span>
               <span class="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white/80">${icon("clipboard-list", "h-3.5 w-3.5")} Packliste</span>
             </div>
+            <button type="button" data-action="start-demo" class="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3.5 text-sm font-bold text-slate-900 shadow-sm transition hover:bg-slate-100 active:scale-[.99]">
+              ${icon("play-circle", "h-5 w-5")} Demo ohne Konto ausprobieren ${icon("arrow-up-right", "h-4 w-4")}
+            </button>
+            <p class="mt-2 text-center text-xs text-slate-300">Kostenlos testen · keine Anmeldung nötig</p>
           </div>
         </section>
 
@@ -1266,6 +1272,7 @@
             ${icon("shield-check", "h-4 w-4")} Deine Reiseplanung an einem Ort.
           </div>
         </section>
+        ${authFromDemo ? '<button type="button" data-action="return-to-demo" class="mx-auto mt-4 flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">' + icon("arrow-left","h-4 w-4") + ' Zurück zur Demo</button>' : ""}
         <p class="mx-auto mt-5 max-w-sm text-center text-[11px] leading-5 text-slate-400">Mit deinem Konto kannst du deine Urlaube, Ausgaben und Listen an einem Ort verwalten.</p>
       </main>
     </div>`;
@@ -2756,7 +2763,7 @@
     return `<div class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
       <div class="mx-auto w-full max-w-6xl px-4 pb-32 pt-5 md:px-6 md:pb-32 md:pt-6">
         ${error ? `<div class="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 ring-1 ring-rose-100">${esc(error)}</div>` : ""}
-        ${offlineStatusHTML()}
+        ${demoMode ? demoBannerHTML() : offlineStatusHTML()}
         <main id="ua-page-content" class="${animateNextPage ? "ua-page-enter" : ""}">${pageContent}</main>
       </div>
 
@@ -2777,6 +2784,7 @@
       ${joinDialogOpen ? joinDialogHTML() : ""}
       ${deleteDialog ? deleteConfirmHTML() : ""}
       ${customCategoryDialog ? customExpenseCategoryDialogHTML() : ""}
+      ${demoGateOpen ? demoGateHTML() : ""}
     </div>`;
   }
 
@@ -4533,6 +4541,7 @@
   }
 
   async function loadTrips() {
+    if (demoMode) { if (!trips.length) loadDemoTrips(); render(); return; }
     if (!session) return;
     error = "";
     if (!navigator.onLine) {
@@ -4613,7 +4622,10 @@
   }
 
   function setupRealtime() {
-    if (!activeTrip()) return;
+    if (demoMode || !session || !activeTrip()) {
+      if (realtimeChannel) { supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
+      return;
+    }
     if (realtimeChannel) {
       supabase.removeChannel(realtimeChannel);
       realtimeChannel = null;
@@ -5359,6 +5371,18 @@
     const action=el.dataset.action;
 
     try {
+      if (action === "start-demo") { startDemoMode(); return; }
+      if (action === "demo-open-auth") { openAuthFromDemo(el.dataset.mode || "signup"); return; }
+      if (action === "close-demo-gate") { demoGateOpen = false; demoGateReason = ""; render(); return; }
+      if (action === "return-to-demo") { startDemoMode(); return; }
+      if (action === "leave-demo") { leaveDemoMode(); return; }
+      if (demoMode && action === "toggle-list") { toggleDemoList(el.dataset.kind, el.dataset.id); return; }
+      if (demoMode && DEMO_LOCKED_ACTIONS.has(action)) {
+        demoGateReason = demoGateMessage(action);
+        demoGateOpen = true;
+        render();
+        return;
+      }
       if ((action === "select-expense-custom-category") && suppressExpenseCategoryClick) {
         suppressExpenseCategoryClick = false;
         return;
@@ -5476,8 +5500,8 @@
       if(action==="delete-account"){if(!window.confirm("Wirklich alle Daten und den Account löschen?"))return;await deleteAccount();return;}
       if(action==="sign-out"){await signOut();return;}
       if(action==="create-trip"){await createTrip();return;}
-      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){const nextPage=el.dataset.page||"more";if(nextPage!==activePage){animateNextPage=true;navTransitionFromPage=activePage;}activePage=nextPage;localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
-      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
+      if(action==="select-dashboard-trip" || action==="open-dashboard-section"){selectedTripId=el.dataset.id;localStorage.setItem(demoMode ? DEMO_SELECTED_TRIP_KEY : K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;if(action==="open-dashboard-section"){const nextPage=el.dataset.page||"more";if(nextPage!==activePage){animateNextPage=true;navTransitionFromPage=activePage;}activePage=nextPage;localStorage.setItem(PAGE_KEY,activePage);}render();setupRealtime();await loadAIChatHistory(true);return;}
+      if(action==="select-trip"){selectedTripId=el.dataset.id;localStorage.setItem(demoMode ? DEMO_SELECTED_TRIP_KEY : K.trip,selectedTripId);selectedPersonId=null;loadPersonMeta();activityExpanded=false;reminderMessage="";if(activeTrip()?.startDate)daySelected=activeTrip().startDate;render();setupRealtime();await loadAIChatHistory(true);return;}
       if(action==="delete-trip"){deleteDialog={label:"Urlaub",onConfirm:()=>deleteTrip(el.dataset.id)};render();return;}
       if(action==="share-trip"){shareTripId=el.dataset.id;shareDialogOpen=true;shareCode="";render();await createShareCode(shareTripId);return;}
       if(action==="close-share"){shareDialogOpen=false;shareTripId=null;shareCode="";render();return;}
@@ -5790,24 +5814,30 @@
   supabase.auth.getSession().then(async ({data})=>{
     session=data.session||null;
     settingsUsername=session?.user?.user_metadata?.urlaub_assistent_name||"";
+    if (session) { demoMode = false; localStorage.removeItem(DEMO_MODE_KEY); authFromDemo = false; }
     await waitForMinimumSplash();
     checking=false;
     acceptedCookies=true;
     if(session && !recovery){loadTrips();}
+    else if(demoMode){loadDemoTrips();render();}
     else{render();}
   }).catch(async ()=>{
     await waitForMinimumSplash();
     checking=false;
+    if(demoMode) loadDemoTrips();
     render();
   });
 
   supabase.auth.onAuthStateChange((_event,nextSession)=>{
     session=nextSession;
+    if (session) { demoMode = false; localStorage.removeItem(DEMO_MODE_KEY); authFromDemo = false; }
     if(!session) aiOpen=false;
     settingsUsername=session?.user?.user_metadata?.urlaub_assistent_name||"";
     if(_event==="INITIAL_SESSION") return;
     if(_event==="PASSWORD_RECOVERY") recovery=true;
-    if(session && !recovery){acceptedCookies=true;loadTrips();}else{render();}
+    if(session && !recovery){acceptedCookies=true;loadTrips();}
+    else if(demoMode){loadDemoTrips();render();}
+    else{render();}
   });
 
   render();
