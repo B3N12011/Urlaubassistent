@@ -420,6 +420,10 @@
   let offlineCacheUserId = null;
   let offlineSyncInProgress = false;
   let offlineSyncMessage = "";
+  let offlineSyncRetryTimer = null;
+  let offlineSyncRetryAttempt = 0;
+  let offlineResumeInProgress = false;
+  const OFFLINE_SYNC_RETRY_DELAYS = [2500, 6000, 12000, 25000];
   let error = "";
   let trips = [];
   let selectedTripId = localStorage.getItem(K.trip) || null;
@@ -3794,23 +3798,42 @@
   function restoreOfflineTripsCache() {
     const key = offlineStorageKey(OFFLINE_CACHE_PREFIX);
     if (!key || !session?.user?.id) return false;
+    let saved = null;
     try {
-      const saved = JSON.parse(localStorage.getItem(key) || "null");
-      if (!saved || saved.version !== 1 || saved.userId !== session.user.id || !Array.isArray(saved.trips)) return false;
+      saved = JSON.parse(localStorage.getItem(key) || "null");
+    } catch (e) {
+      console.warn("Offline-Cache konnte nicht gelesen werden:", e);
+    }
+
+    const validCache = saved && saved.version === 1 &&
+      saved.userId === session.user.id && Array.isArray(saved.trips);
+
+    if (validCache) {
       trips = saved.trips;
       selectedTripId = saved.selectedTripId || localStorage.getItem(K.trip) || trips[0]?.id || null;
       if (selectedTripId && !trips.some(trip => trip.id === selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
-      offlineCacheLoaded = true;
-      offlineCacheUserId = session.user.id;
-      readOfflineQueue().forEach(applyOfflineOperation);
-      saveOfflineTripsCache();
-      return true;
-    } catch (e) {
-      console.warn("Offline-Cache konnte nicht gelesen werden:", e);
-      return false;
+    } else {
+      // The queue is also a recoverable journal. This allows a newly-created
+      // trip to be restored even if writing the larger cache failed.
+      const queue = readOfflineQueue();
+      if (!queue.length) return false;
+      trips = [];
+      selectedTripId = localStorage.getItem(K.trip) || null;
+      queue.forEach(applyOfflineOperation);
+      if (!selectedTripId || !trips.some(trip => trip.id === selectedTripId)) {
+        selectedTripId = trips[0]?.id || null;
+      }
+      if (!daySelected && trips[0]) daySelected = trips[0].startDate;
     }
+
+    offlineCacheLoaded = true;
+    offlineCacheUserId = session.user.id;
+    readOfflineQueue().forEach(applyOfflineOperation);
+    saveOfflineTripsCache();
+    return true;
   }
+
 
   async function executeOfflineOperation(op) {
     const allowedTables = new Set(["trips", "trip_members", "trip_people", "trip_expenses", "trip_tolls", "trip_pack_items", "trip_todos", "trip_share_codes"]);
@@ -3839,14 +3862,25 @@
     const queue = readOfflineQueue();
     for (const op of operations) {
       if (!queue.some(existing => existing.queueId === op.queueId)) queue.push(op);
-      applyOfflineOperation(op);
     }
-    writeOfflineQueue(queue);
-    const saved = saveOfflineTripsCache();
-    if (!saved) throw new Error("Die Änderung wurde vorbereitet, aber der lokale Gerätespeicher konnte nicht vollständig gesichert werden. Bitte schaffe Speicherplatz und versuche es erneut.");
-    offlineSyncMessage = queue.length + (queue.length === 1 ? " Änderung lokal gespeichert. Synchronisierung folgt bei Verbindung." : " Änderungen lokal gespeichert. Synchronisierung folgt bei Verbindung.");
+
+    // Persist the queue first. If storage is full, do not show the operation
+    // as applied locally when it cannot be recovered after an app restart.
+    try {
+      writeOfflineQueue(queue);
+    } catch (e) {
+      console.error("Offline-Warteschlange konnte nicht gespeichert werden:", e);
+      throw new Error("Der Gerätespeicher ist voll. Diese Änderung wurde nicht lokal gesichert. Schaffe bitte Speicherplatz und versuche es erneut.");
+    }
+
+    operations.forEach(applyOfflineOperation);
+    const cacheSaved = saveOfflineTripsCache();
+    offlineSyncMessage = !cacheSaved
+      ? "Die Änderung ist in der Synchronisierungswarteschlange auf diesem Gerät vorgemerkt. Der Reisecache konnte nicht aktualisiert werden; öffne die App mit Internet, sobald möglich."
+      : queue.length + (queue.length === 1 ? " Änderung lokal gespeichert. Synchronisierung folgt bei Verbindung." : " Änderungen lokal gespeichert. Synchronisierung folgt bei Verbindung.");
     render();
   }
+
 
   async function persistLocalFirstOperations(operations) {
     if (!session?.user?.id) throw new Error("Bitte melde dich an, bevor du Änderungen speicherst.");
@@ -3896,6 +3930,7 @@
     offline = false;
     offlineSyncMessage = "Änderungen werden mit deinem Konto synchronisiert …";
     if (renderAfter) render();
+    let retryForNetworkFailure = false;
     try {
       while (true) {
         const queue = readOfflineQueue();
@@ -3905,7 +3940,10 @@
           await executeOfflineOperation(op);
         } catch (e) {
           console.error("Offline-Synchronisierung fehlgeschlagen:", e);
-          if (isOfflineNetworkFailure(e)) offline = true;
+          if (isOfflineNetworkFailure(e)) {
+            offline = true;
+            retryForNetworkFailure = true;
+          }
           const remaining = readOfflineQueue().length;
           offlineSyncMessage = friendlyAppError(e, "Synchronisieren") + (remaining ? " Noch " + remaining + (remaining === 1 ? " Änderung wartet." : " Änderungen warten.") : "");
           break;
@@ -3925,7 +3963,66 @@
       return false;
     } finally {
       offlineSyncInProgress = false;
+      if (retryForNetworkFailure && pendingOfflineOperationCount()) scheduleOfflineSyncRetry();
       if (renderAfter) render();
+    }
+  }
+
+  function clearOfflineSyncRetry(resetAttempt = false) {
+    if (offlineSyncRetryTimer !== null) {
+      clearTimeout(offlineSyncRetryTimer);
+      offlineSyncRetryTimer = null;
+    }
+    if (resetAttempt) offlineSyncRetryAttempt = 0;
+  }
+
+  function scheduleOfflineSyncRetry() {
+    if (!navigator.onLine || !session?.user?.id || !pendingOfflineOperationCount() || offlineSyncRetryTimer !== null) return;
+
+    if (offlineSyncRetryAttempt >= OFFLINE_SYNC_RETRY_DELAYS.length) {
+      offlineSyncMessage = "Die automatische Synchronisierung wurde pausiert, weil die Verbindung weiter fehlschlägt. Deine Änderungen bleiben lokal erhalten; tippe „Jetzt synchronisieren“, sobald die Verbindung stabil ist.";
+      return;
+    }
+
+    const delay = OFFLINE_SYNC_RETRY_DELAYS[offlineSyncRetryAttempt++];
+    offlineSyncRetryTimer = window.setTimeout(async () => {
+      offlineSyncRetryTimer = null;
+      if (!navigator.onLine || !session?.user?.id || !pendingOfflineOperationCount()) return;
+      const synced = await syncOfflineChanges();
+      if (synced) {
+        clearOfflineSyncRetry(true);
+        await loadTrips();
+      }
+    }, delay);
+  }
+
+  async function resumeOfflineSyncIfNeeded(force = false) {
+    if (!session?.user?.id || offlineResumeInProgress || offlineSyncInProgress) return;
+    const pending = pendingOfflineOperationCount();
+    if (!force && !pending && !offline && navigator.onLine) return;
+
+    if (!navigator.onLine) {
+      offline = true;
+      restoreOfflineTripsCache();
+      render();
+      return;
+    }
+
+    offlineResumeInProgress = true;
+    try {
+      if (pending) {
+        const synced = await syncOfflineChanges({ renderAfter: false });
+        if (!synced) {
+          render();
+          return;
+        }
+        clearOfflineSyncRetry(true);
+      }
+      offline = false;
+      await loadTrips();
+    } finally {
+      offlineResumeInProgress = false;
+      render();
     }
   }
 
@@ -4781,9 +4878,10 @@
       }
       if(action==="sync-offline-now"){
         if(!navigator.onLine){offline=true;offlineSyncMessage="Keine Verbindung. Deine Änderungen bleiben lokal gespeichert.";render();return;}
+        clearOfflineSyncRetry(true);
         offline=false;
         const done=await syncOfflineChanges();
-        if(done) await loadTrips();
+        if(done){clearOfflineSyncRetry(true);await loadTrips();}
         return;
       }
       if(action==="navigate"){
@@ -5129,16 +5227,32 @@
   });
 
   window.addEventListener("online", async () => {
+    clearOfflineSyncRetry(true);
     offline = false;
     if (session) {
-      await syncOfflineChanges({ renderAfter: false });
-      await loadTrips();
-    } else { render(); }
+      await resumeOfflineSyncIfNeeded(true);
+    } else {
+      render();
+    }
   });
+
   window.addEventListener("offline", () => {
     offline = true;
     if (session) restoreOfflineTripsCache();
     render();
+  });
+
+  // If the app was suspended while the connection returned, retry on resume.
+  window.addEventListener("focus", () => {
+    if (session && navigator.onLine) resumeOfflineSyncIfNeeded();
+  });
+  window.addEventListener("pageshow", () => {
+    if (session && navigator.onLine) resumeOfflineSyncIfNeeded();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && session && navigator.onLine) {
+      resumeOfflineSyncIfNeeded();
+    }
   });
 
 
@@ -5155,7 +5269,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=52").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=53").catch(() => {});
     }, { once: true });
   }
 
