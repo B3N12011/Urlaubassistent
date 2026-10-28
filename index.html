@@ -522,7 +522,8 @@
     "toggle-family-auto-share", "share-trip-family", "delete-family", "edit-family-name", "save-family-name",
     "remove-family-member", "leave-family", "revoke-family-invite", "unshare-family-trip-member",
     "send-ai", "ai-followup", "ai-multiple-expenses", "ai-trip-manage", "ai-receipt", "ai-start-voice",
-    "approve-ai-actions", "new-ai-chat", "open-ai-saved-chat", "save-username", "save-settings-password", "open-settings", "toggle-ai-history",
+    "approve-ai-actions", "new-ai-chat", "open-ai-saved-chat", "save-username", "save-settings-password", "open-settings", "toggle-ai-history", "toggle-ai-web-search",
+    "toggle-reminders", "toggle-passport-reminder", "toggle-departure-reminder", "toggle-packing-reminder", "enable-notifications", "test-reminder",
     "show-delete-account", "delete-account", "account-reset", "confirm-delete"
   ]);
   const LIST_LIMIT = 5;
@@ -5864,7 +5865,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=58").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=59").catch(() => {});
     }, { once: true });
   }
 
