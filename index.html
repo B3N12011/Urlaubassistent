@@ -81,7 +81,7 @@
       .modal-backdrop, .modal-backdrop > div { animation: none !important; }
       nav button, nav button span:first-child, button[data-action],
       main#ua-page-content section { transition: none !important; }
-      .ua-nav-indicator-moving, .ua-nav-icon-pop, .ua-nav-indicator-moving::after { animation: none !important; }
+      .ua-nav-indicator-moving, .ua-nav-icon-pop, .ua-nav-label-pop, .ua-nav-indicator-moving::after { animation: none !important; }
     }
     .person-dark-input {
       background: rgba(255, 255, 255, 0.07) !important;
@@ -143,8 +143,10 @@
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
       transform: skewX(-18deg); opacity: 0;
     }
-    .ua-nav-indicator-moving { animation: ua-nav-sweep 470ms cubic-bezier(.18,.72,.25,1) both; will-change: transform; }
-    .ua-nav-indicator-moving::after { opacity: 1; animation: ua-nav-sheen 470ms ease-out both; }
+    .ua-nav-indicator-moving { animation: ua-nav-sweep 560ms cubic-bezier(.16,.82,.22,1) both; will-change: transform; transform-origin: center; }
+    .ua-nav-indicator-moving::after { opacity: 1; animation: ua-nav-sheen 560ms ease-out both; }
+    .ua-nav-label { display: inline-block; transform-origin: center bottom; }
+    .ua-nav-label-pop { animation: ua-nav-label-pop 420ms cubic-bezier(.18,.72,.25,1) both; }
     .ua-nav-item {
       position: relative; z-index: 1; display: flex; min-width: 0; flex: 1;
       flex-direction: column; align-items: center; justify-content: center; gap: .25rem;
@@ -156,17 +158,23 @@
     .ua-nav-icon { transition: transform 220ms cubic-bezier(.2,.75,.25,1), background-color 220ms ease; }
     .ua-nav-icon-pop { animation: ua-nav-icon-pop 420ms cubic-bezier(.18,.72,.25,1) both; }
     @keyframes ua-nav-sweep {
-      0% { transform: var(--ua-nav-from) scale(.96); filter: brightness(.94); }
-      56% { transform: var(--ua-nav-to) scale(1.035); filter: brightness(1.08); }
-      76% { transform: var(--ua-nav-to) scale(.99); filter: brightness(1.01); }
-      100% { transform: var(--ua-nav-to) scale(1); filter: brightness(1); }
+      0% { transform: var(--ua-nav-from) scale(.94,.92); filter: brightness(.92); }
+      48% { transform: var(--ua-nav-to) scale(1.045,1.055); filter: brightness(1.10); }
+      70% { transform: var(--ua-nav-to) scale(.99,.99); filter: brightness(1.02); }
+      86% { transform: var(--ua-nav-to) scale(1.012,1.015); filter: brightness(1.01); }
+      100% { transform: var(--ua-nav-to) scale(1,1); filter: brightness(1); }
     }
-    @keyframes ua-nav-sheen { 0% { left: -50%; opacity: 0; } 28% { opacity: 1; } 100% { left: 125%; opacity: 0; } }
+    @keyframes ua-nav-sheen { 0% { left: -50%; opacity: 0; } 24% { opacity: 1; } 100% { left: 125%; opacity: 0; } }
     @keyframes ua-nav-icon-pop {
       0% { transform: scale(.76) translateY(2px); }
-      58% { transform: scale(1.12) translateY(-1px); }
-      78% { transform: scale(.96); }
-      100% { transform: scale(1); }
+      52% { transform: scale(1.14) translateY(-2px); }
+      74% { transform: scale(.96) translateY(0); }
+      100% { transform: scale(1) translateY(0); }
+    }
+    @keyframes ua-nav-label-pop {
+      0% { opacity: .68; transform: translateY(3px) scale(.92); }
+      58% { opacity: 1; transform: translateY(-1px) scale(1.04); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
 
 
@@ -1213,7 +1221,7 @@
     const pop = active && navTransitionFromPage !== null && navTransitionFromPage !== page;
     return '<button type="button" data-action="navigate" data-page="' + page + '" aria-current="' + (active ? "page" : "false") + '" class="ua-nav-item ' + (active ? "text-white" : "text-slate-500 hover:text-slate-900") + '">' +
       '<span class="ua-nav-icon flex h-9 w-9 items-center justify-center rounded-xl ' + (active ? "bg-white/10 text-white " + (pop ? "ua-nav-icon-pop" : "") : "bg-transparent") + '">' + icon(iconName, "h-5 w-5") + '</span>' +
-      '<span class="text-[11px] font-semibold leading-none">' + label + '</span></button>';
+      '<span class="ua-nav-label text-[11px] font-semibold leading-none '+ (pop ? "ua-nav-label-pop" : "") + '">' + label + '</span></button>';
   }
 
   function topBarHTML(title, subtitle) {
@@ -5411,7 +5419,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=56").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=57").catch(() => {});
     }, { once: true });
   }
 
