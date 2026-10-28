@@ -3813,6 +3813,7 @@
       selectedTripId = saved.selectedTripId || localStorage.getItem(K.trip) || trips[0]?.id || null;
       if (selectedTripId && !trips.some(trip => trip.id === selectedTripId)) selectedTripId = trips[0]?.id || null;
       if (!daySelected && trips[0]) daySelected = trips[0].startDate;
+      readOfflineQueue().forEach(applyOfflineOperation);
     } else {
       // The queue is also a recoverable journal. This allows a newly-created
       // trip to be restored even if writing the larger cache failed.
@@ -3829,7 +3830,6 @@
 
     offlineCacheLoaded = true;
     offlineCacheUserId = session.user.id;
-    readOfflineQueue().forEach(applyOfflineOperation);
     saveOfflineTripsCache();
     return true;
   }
@@ -3878,6 +3878,7 @@
     offlineSyncMessage = !cacheSaved
       ? "Die Änderung ist in der Synchronisierungswarteschlange auf diesem Gerät vorgemerkt. Der Reisecache konnte nicht aktualisiert werden; öffne die App mit Internet, sobald möglich."
       : queue.length + (queue.length === 1 ? " Änderung lokal gespeichert. Synchronisierung folgt bei Verbindung." : " Änderungen lokal gespeichert. Synchronisierung folgt bei Verbindung.");
+    if (navigator.onLine) scheduleOfflineSyncRetry();
     render();
   }
 
@@ -5269,7 +5270,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=53").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=54").catch(() => {});
     }, { once: true });
   }
 
