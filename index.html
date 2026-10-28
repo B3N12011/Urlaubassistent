@@ -522,7 +522,7 @@
     "toggle-family-auto-share", "share-trip-family", "delete-family", "edit-family-name", "save-family-name",
     "remove-family-member", "leave-family", "revoke-family-invite", "unshare-family-trip-member",
     "send-ai", "ai-followup", "ai-multiple-expenses", "ai-trip-manage", "ai-receipt", "ai-start-voice",
-    "approve-ai-actions", "new-ai-chat", "open-ai-saved-chat", "save-username", "save-settings-password",
+    "approve-ai-actions", "new-ai-chat", "open-ai-saved-chat", "save-username", "save-settings-password", "open-settings", "toggle-ai-history",
     "show-delete-account", "delete-account", "account-reset", "confirm-delete"
   ]);
   const LIST_LIMIT = 5;
@@ -1483,13 +1483,26 @@
           </div>
         `)}
 
-        ${cardHTML("Konto", "Angemeldetes Konto", "circle-user-round", `
-          <div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><div class="text-xs uppercase tracking-wide text-slate-500">Angemeldet als</div><div class="mt-1 truncate font-medium">${esc(session.user.email || "")}</div></div>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">${buttonHTML("Account löschen", `data-action="show-delete-account"`, "danger")}${buttonHTML(`${icon("log-out","h-4 w-4")} Abmelden`, `data-action="sign-out"`, "soft")}</div>
-        `)}
+        ${accountSummaryCardHTML()}
       </div>
       `}
     </div>`;
+  }
+
+  function accountSummaryCardHTML() {
+    if (demoMode) {
+      return cardHTML("Demo-Modus", "Beispieldaten auf diesem Gerät", "flask-conical", \`
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-sm font-semibold text-slate-900">Du testest Urlaubassistent ohne Konto.</div>
+          <p class="mt-1 text-sm leading-5 text-slate-500">Deine Checklisten-Auswahl bleibt lokal in der Demo. Sie wird nicht mit einem echten Konto synchronisiert.</p>
+        </div>
+        <button type="button" data-action="demo-open-auth" data-mode="signup" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">\${icon("user-round-plus","h-4 w-4")} Kostenloses Konto erstellen</button>
+      \`);
+    }
+    return cardHTML("Konto", "Angemeldetes Konto", "circle-user-round", \`
+      <div class="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200"><div class="text-xs uppercase tracking-wide text-slate-500">Angemeldet als</div><div class="mt-1 truncate font-medium">\${esc(session?.user?.email || "")}</div></div>
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">\${buttonHTML("Account löschen", \`data-action="show-delete-account"\`, "danger")}\${buttonHTML(\`\${icon("log-out","h-4 w-4")} Abmelden\`, \`data-action="sign-out"\`, "soft")}</div>
+    \`);
   }
 
   function tripsPageHTML() {
