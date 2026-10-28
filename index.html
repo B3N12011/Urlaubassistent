@@ -407,25 +407,81 @@
       .ua-auth-hero, .ua-auth-card { animation: none !important; }
       .ua-auth-tab, .ua-auth-input, .ua-auth-submit { transition: none !important; }
     }
+
+    /* Minimal navy loader: app icon, a quiet orbit line and three moving dots. */
+    .ua-loading-screen {
+      position: relative;
+      color: #fff !important;
+      background: #0f172a !important;
+      isolation: isolate;
+    }
+    .ua-loading-screen::before { content: none !important; }
+    .ua-loader-orbit-bg {
+      position: absolute;
+      display: block;
+      border: 1px solid rgba(226,232,240,.10);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .ua-loader-orbit-bg-one { width: min(86vw, 430px); aspect-ratio: 1; top: -135px; right: -155px; }
+    .ua-loader-orbit-bg-two { width: min(58vw, 285px); aspect-ratio: 1; top: -67px; right: -75px; border-color: rgba(226,232,240,.075); }
+    .ua-loader-orbit-bg-three { width: min(100vw, 480px); aspect-ratio: 1; bottom: -330px; left: -240px; border-color: rgba(226,232,240,.055); }
+    .ua-loader-center { position: relative; z-index: 2; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .ua-loader-icon-shell {
+      position: relative; display:flex; align-items:center; justify-content:center;
+      width: 116px; height: 116px; border-radius: 32px;
+      border: 1px solid rgba(226,232,240,.19);
+      background: linear-gradient(145deg, rgba(255,255,255,.10), rgba(255,255,255,.025));
+      box-shadow: 0 18px 48px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    .ua-loader-icon-shell::before {
+      content:""; position:absolute; inset:-6px; border:1px solid rgba(148,163,184,.13);
+      border-radius:37px; pointer-events:none;
+    }
+    .ua-loader-logo { display:block; width:88px; height:88px; border-radius:23px; object-fit:cover; }
+    .ua-loader-orbit-ring {
+      position:absolute; inset:-16px; border:1px solid rgba(148,163,184,.22);
+      border-radius:50%; pointer-events:none; animation: ua-loader-orbit-rotate 18s linear infinite;
+    }
+    .ua-loader-orbit-ring::after {
+      content:""; position:absolute; top:16%; right:12%; width:6px; height:6px; border-radius:50%;
+      background:#cbd5e1; box-shadow:0 0 10px rgba(203,213,225,.36);
+    }
+    .ua-loader-dots { display:flex; align-items:center; justify-content:center; gap:9px; margin-top:30px; min-height:12px; }
+    .ua-loader-dots span {
+      display:block; width:7px; height:7px; border-radius:50%; background:#cbd5e1;
+      opacity:.35; transform:translateY(0) scale(.86); animation:ua-loader-dot-bounce 900ms ease-in-out infinite;
+    }
+    .ua-loader-dots span:nth-child(2) { animation-delay:150ms; }
+    .ua-loader-dots span:nth-child(3) { animation-delay:300ms; }
+    @keyframes ua-loader-dot-bounce {
+      0%,60%,100% { opacity:.35; transform:translateY(0) scale(.86); }
+      30% { opacity:1; transform:translateY(-5px) scale(1); }
+    }
+    @keyframes ua-loader-orbit-rotate {
+      from { transform:rotate(-18deg); }
+      to { transform:rotate(342deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-loader-orbit-ring, .ua-loader-dots span { animation:none !important; }
+    }
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
 
 <div id="root">
-  <div class="ua-status-screen ua-loading-screen" role="status" aria-label="Urlaubassistent wird geladen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:24px;text-align:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#f8fafc">
-    <div class="ua-status-glow ua-status-glow-one"></div>
-    <div class="ua-status-glow ua-status-glow-two"></div>
-    <div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center">
-      <div class="ua-splash-content">
-        <div class="ua-splash-logo-shell"><img src="./icon-192.png" alt="" width="108" height="108" class="ua-app-mark"></div>
-        <div class="ua-splash-brand">Dein Reisebegleiter</div>
-        <div class="ua-splash-title">Urlaubassistent</div>
-        <div class="ua-splash-subtitle">Dein nächstes Abenteuer beginnt hier.</div>
-        <div class="ua-splash-loading-row"><div class="ua-loading-dots"><span></span><span></span><span></span></div><span>Deine Reisen werden vorbereitet</span></div>
-        <div class="ua-splash-progress" aria-hidden="true"><span></span></div>
+  <div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen" style="position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0f172a;color:#fff">
+    <span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span>
+    <span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span>
+    <span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>
+    <div class="ua-loader-center">
+      <div class="ua-loader-icon-shell">
+        <span class="ua-loader-orbit-ring" aria-hidden="true"></span>
+        <img src="./icon-192.png" alt="" width="88" height="88" class="ua-loader-logo" />
       </div>
+      <div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div>
     </div>
-    <div class="ua-splash-footer" aria-hidden="true"><span>PLANEN</span><span class="ua-splash-footer-dot"></span><span>ENTDECKEN</span><span class="ua-splash-footer-dot"></span><span>ERINNERN</span></div>
   </div>
 </div>
 <script>
@@ -1130,15 +1186,10 @@
   }
 
   function loadingHTML() {
-    return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6 text-slate-100">' +
-      '<div class="ua-status-glow ua-status-glow-one"></div><div class="ua-status-glow ua-status-glow-two"></div>' +
-      '<div class="relative z-10 flex w-full max-w-sm flex-col items-center text-center"><div class="ua-splash-content">' +
-      '<div class="ua-splash-logo-shell"><img src="./icon-192.png" alt="Urlaubassistent" width="108" height="108" class="ua-app-mark" /></div>' +
-      '<div class="ua-splash-brand">Dein Reisebegleiter</div><h1 class="ua-splash-title">Urlaubassistent</h1>' +
-      '<p class="ua-splash-subtitle">Dein nächstes Abenteuer beginnt hier.</p>' +
-      '<div class="ua-splash-loading-row" role="status" aria-label="Urlaubassistent wird geladen"><div class="ua-loading-dots"><span></span><span></span><span></span></div><span>Deine Reisen werden vorbereitet</span></div>' +
-      '<div class="ua-splash-progress" aria-hidden="true"><span></span></div></div></div>' +
-      '<div class="ua-splash-footer" aria-hidden="true"><span>PLANEN</span><span class="ua-splash-footer-dot"></span><span>ENTDECKEN</span><span class="ua-splash-footer-dot"></span><span>ERINNERN</span></div></div>';
+    return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen">' +
+      '<span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>' +
+      '<div class="ua-loader-center"><div class="ua-loader-icon-shell"><span class="ua-loader-orbit-ring" aria-hidden="true"></span><img src="./icon-192.png" alt="Urlaubassistent" width="88" height="88" class="ua-loader-logo" /></div>' +
+      '<div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div></div></div>';
   }
 
   function offlineHTML() {
@@ -1155,6 +1206,7 @@
           ${icon("wifi-off", "h-4 w-4 text-slate-400")}
           Verbindung wird automatisch erkannt
         </div>
+        ${!session ? '<button type="button" data-action="start-demo" class="mt-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">' + icon("play-circle","h-4 w-4") + ' Demo ohne Internet öffnen</button>' : ""}
       </div>
     </div>`;
   }
@@ -5799,7 +5851,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=57").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=58").catch(() => {});
     }, { once: true });
   }
 
