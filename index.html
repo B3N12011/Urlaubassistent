@@ -3071,6 +3071,26 @@
       trips = [createDemoTrip()];
       saveDemoTrips();
     }
+
+    // Upgrade older demo samples too, so the five-item preview gate is visible
+    // for people who already used an earlier version of the demo.
+    const sampleTrip = trips.find(item => item.id === "demo-trip-france" && !item.demoUserCreated);
+    if (sampleTrip) {
+      sampleTrip.expenses = Array.isArray(sampleTrip.expenses) ? sampleTrip.expenses : [];
+      const demoExtras = [
+        { id: "demo-exp-5", title: "Museumstickets", amount: 48, category: "Aktivitäten", personId: "demo-person-me", date: demoDateOffset(6), note: "Beispielausgabe" },
+        { id: "demo-exp-6", title: "Abendessen", amount: 72.4, category: "Essen", personId: "demo-person-sam", date: demoDateOffset(7), note: "Beispielausgabe" },
+        { id: "demo-exp-7", title: "Parkplatz", amount: 18, category: "Sonstiges", personId: "demo-person-alex", date: demoDateOffset(8), note: "Beispielausgabe" }
+      ];
+      let changed = false;
+      for (const entry of demoExtras) {
+        if (!sampleTrip.expenses.some(item => item.id === entry.id)) {
+          sampleTrip.expenses.push(entry);
+          changed = true;
+        }
+      }
+      if (changed) saveDemoTrips();
+    }
     const storedSelection = localStorage.getItem(DEMO_SELECTED_TRIP_KEY);
     selectedTripId = trips.some(trip => trip.id === storedSelection) ? storedSelection : (trips[0] ? trips[0].id : null);
     family = null;
@@ -5936,7 +5956,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=62").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=63").catch(() => {});
     }, { once: true });
   }
 
