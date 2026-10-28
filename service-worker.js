@@ -1,4 +1,4 @@
-const CACHE_NAME = 'urlaubassistent-shell-v55';
+const CACHE_NAME = 'urlaubassistent-shell-v56';
 const RUNTIME_CACHE_NAME = 'urlaubassistent-runtime-assets-v1';
 const APP_SHELL = [
   './',
@@ -49,6 +49,29 @@ self.addEventListener('activate', event => {
       keys.filter(key => key.startsWith('urlaubassistent-shell-') && key !== CACHE_NAME)
         .map(key => caches.delete(key))
     )).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const requestedUrl = event.notification?.data?.url || './';
+  const destination = new URL(requestedUrl, self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clients => {
+      for (const client of clients) {
+        try {
+          const clientUrl = new URL(client.url);
+          if (clientUrl.origin !== self.location.origin) continue;
+          if (typeof client.navigate === 'function' && client.url !== destination) {
+            await client.navigate(destination);
+          }
+          return client.focus();
+        } catch {
+          // If a client cannot be focused, try the next one or open a new window.
+        }
+      }
+      return self.clients.openWindow(destination);
+    })
   );
 });
 
