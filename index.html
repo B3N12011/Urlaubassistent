@@ -454,10 +454,29 @@
     aiChatPrefix: "urlaubassistent-ai-chat-"
   };
 
+  const DEMO_MODE_KEY = "urlaubassistent-demo-mode";
+  const DEMO_DATA_KEY = "urlaubassistent-demo-data-v1";
+  const DEMO_SELECTED_TRIP_KEY = "urlaubassistent-demo-selected-trip";
+  const DEMO_LOCKED_ACTIONS = new Set([
+    "create-trip", "delete-trip", "share-trip", "join-trip", "copy-share-code",
+    "add-person", "delete-person", "add-expense", "add-expense-custom-category", "add-toll",
+    "add-pack", "add-todo", "delete-entry", "delete-list", "add-debt", "delete-debt",
+    "save-person-budget", "save-custom-category", "delete-custom-category",
+    "create-family", "join-family", "create-family-invite", "copy-family-code", "copy-family-invite-code",
+    "toggle-family-auto-share", "share-trip-family", "delete-family", "edit-family-name", "save-family-name",
+    "remove-family-member", "leave-family", "revoke-family-invite", "unshare-family-trip-member",
+    "send-ai", "ai-followup", "ai-multiple-expenses", "ai-trip-manage", "ai-receipt", "ai-start-voice",
+    "approve-ai-actions", "new-ai-chat", "open-ai-saved-chat", "save-username", "save-settings-password",
+    "show-delete-account", "delete-account", "account-reset", "confirm-delete"
+  ]);
   const LIST_LIMIT = 5;
   const root = document.getElementById("root");
 
   let session = null;
+  let demoMode = localStorage.getItem(DEMO_MODE_KEY) === "true";
+  let demoGateOpen = false;
+  let demoGateReason = "";
+  let authFromDemo = false;
   let acceptedCookies = true;
   let recovery = false;
   const splashStartedAt = Date.now();
@@ -2916,6 +2935,180 @@
 
   function activeTrip() {
     return trips.find(t=>t.id===selectedTripId) || trips[0] || null;
+  }
+
+  function demoDateOffset(offsetDays) {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + offsetDays);
+    return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+  }
+
+  function createDemoTrip() {
+    const startDate = demoDateOffset(28);
+    const endDate = demoDateOffset(36);
+    const me = { id: "demo-person-me", name: "Du" };
+    const sam = { id: "demo-person-sam", name: "Sam" };
+    const alex = { id: "demo-person-alex", name: "Alex" };
+    return {
+      id: "demo-trip-france",
+      name: "Frankreich entdecken",
+      destination: "Provence, Frankreich",
+      startDate: startDate,
+      endDate: endDate,
+      budget: 2800,
+      status: "geplant",
+      people: [me, sam, alex],
+      expenses: [
+        { id: "demo-exp-1", title: "Ferienwohnung – Anzahlung", amount: 540, category: "Unterkunft", personId: me.id, date: demoDateOffset(2), note: "Beispielausgabe" },
+        { id: "demo-exp-2", title: "Zugtickets", amount: 268.5, category: "Anreise", personId: sam.id, date: demoDateOffset(3), note: "" },
+        { id: "demo-exp-3", title: "Reiseversicherung", amount: 64.9, category: "Versicherung", personId: alex.id, date: demoDateOffset(4), note: "" },
+        { id: "demo-exp-4", title: "Reiseführer", amount: 22.95, category: "Aktivitäten", personId: me.id, date: demoDateOffset(5), note: "" }
+      ],
+      tolls: [
+        { id: "demo-toll-1", title: "Mautbudget", amount: 35, category: "Maut", personId: me.id, date: startDate, note: "Beispiel" }
+      ],
+      packlist: [
+        { id: "demo-pack-1", text: "Personalausweise prüfen", done: true },
+        { id: "demo-pack-2", text: "Sonnencreme einpacken", done: false },
+        { id: "demo-pack-3", text: "Ladegeräte mitnehmen", done: false },
+        { id: "demo-pack-4", text: "Badesachen einpacken", done: false }
+      ],
+      todos: [
+        { id: "demo-todo-1", text: "Unterkunft bestätigen", done: true },
+        { id: "demo-todo-2", text: "Reiseunterlagen speichern", done: false },
+        { id: "demo-todo-3", text: "Check-in prüfen", done: false }
+      ],
+      role: "owner",
+      shared: false
+    };
+  }
+
+  function loadDemoTrips() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(DEMO_DATA_KEY) || "null"); } catch {}
+    if (saved && saved.version === 1 && Array.isArray(saved.trips) && saved.trips.length) {
+      trips = saved.trips;
+    } else {
+      trips = [createDemoTrip()];
+      saveDemoTrips();
+    }
+    const storedSelection = localStorage.getItem(DEMO_SELECTED_TRIP_KEY);
+    selectedTripId = trips.some(trip => trip.id === storedSelection) ? storedSelection : (trips[0] ? trips[0].id : null);
+    family = null;
+    familyMembers = [];
+    familyInviteCode = "";
+    familyError = "";
+    familyMessage = "";
+    offline = false;
+    offlineCacheLoaded = false;
+    offlineCacheUserId = null;
+    newTrip = { name: "", destination: "", startDate: "", endDate: "", budget: "" };
+  }
+
+  function saveDemoTrips() {
+    if (!demoMode) return false;
+    try {
+      localStorage.setItem(DEMO_DATA_KEY, JSON.stringify({ version: 1, savedAt: new Date().toISOString(), trips: trips }));
+      return true;
+    } catch (e) {
+      console.warn("Demo-Daten konnten nicht gespeichert werden:", e);
+      return false;
+    }
+  }
+
+  function startDemoMode() {
+    demoMode = true;
+    localStorage.setItem(DEMO_MODE_KEY, "true");
+    authFromDemo = false;
+    demoGateOpen = false;
+    demoGateReason = "";
+    session = null;
+    checking = false;
+    error = "";
+    loadDemoTrips();
+    activePage = "overview";
+    localStorage.setItem(PAGE_KEY, activePage);
+    animateNextPage = true;
+    render();
+  }
+
+  function leaveDemoMode() {
+    demoMode = false;
+    localStorage.removeItem(DEMO_MODE_KEY);
+    authFromDemo = false;
+    demoGateOpen = false;
+    demoGateReason = "";
+    trips = [];
+    selectedTripId = null;
+    activePage = "overview";
+    render();
+  }
+
+  function openAuthFromDemo(mode = "signup") {
+    authFromDemo = Boolean(demoMode || authFromDemo);
+    demoMode = false;
+    localStorage.removeItem(DEMO_MODE_KEY);
+    demoGateOpen = false;
+    authMode = mode === "signin" ? "signin" : "signup";
+    authMessage = "";
+    authResetMessage = "";
+    authEmail = "";
+    authPassword = "";
+    showAuthPassword = false;
+    render();
+  }
+
+  function demoGateMessage(action) {
+    if (action.includes("family") || action.includes("invite") || action === "leave-family" || action === "remove-family-member") {
+      return "Family-Einladungen, Mitgliedschaften und gemeinsame Urlaube benötigen ein Konto, damit alle Freigaben sicher deinem Nutzer zugeordnet werden können.";
+    }
+    if (action.includes("share") || action === "join-trip" || action === "copy-share-code") {
+      return "Urlaube mit anderen teilen und geteilten Reisen beitreten funktioniert mit einem Konto. So bleiben Zugriffsrechte und Änderungen nachvollziehbar.";
+    }
+    if (action.startsWith("ai-") || action === "send-ai" || action === "new-ai-chat" || action === "open-ai-saved-chat" || action === "approve-ai-actions") {
+      return "Der KI-Assistent und gespeicherte KI-Chats sind mit einem Konto verfügbar.";
+    }
+    if (action.includes("delete") || action === "confirm-delete") {
+      return "Zum Löschen und dauerhaften Verwalten deiner eigenen Reisedaten brauchst du ein Konto.";
+    }
+    if (action.includes("expense") || action.includes("person") || action.includes("debt") || action.includes("pack") || action.includes("todo") || action.includes("toll") || action === "create-trip") {
+      return "Du kannst die Beispielreise ansehen und einzelne Checklistenpunkte ausprobieren. Um eigene Urlaube, Ausgaben und Aufgaben dauerhaft zu verwalten, brauchst du ein Konto.";
+    }
+    return "Diese Funktion benötigt ein Konto, damit deine Daten sicher gespeichert und zwischen deinen Geräten synchronisiert werden können.";
+  }
+
+  function demoBannerHTML() {
+    return '<section class="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3.5 text-white shadow-lg sm:flex-row sm:items-center">' +
+      '<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">' + icon("flask-conical", "h-5 w-5") + '</span>' +
+      '<div class="min-w-0 flex-1"><div class="text-sm font-bold">Demo-Modus <span class="ml-1 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-300">Beispieldaten</span></div>' +
+      '<p class="mt-1 text-xs leading-5 text-slate-300">Du kannst die App ausprobieren. Änderungen bleiben in dieser Demo auf diesem Gerät und werden nicht in ein Konto übertragen.</p></div>' +
+      '<div class="flex shrink-0 flex-wrap gap-2"><button type="button" data-action="demo-open-auth" data-mode="signup" class="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-3 py-2.5 text-xs font-bold text-slate-900 transition hover:bg-slate-100">' + icon("user-round-plus", "h-4 w-4") + ' Konto erstellen</button>' +
+      '<button type="button" data-action="leave-demo" class="rounded-xl border border-white/20 px-3 py-2.5 text-xs font-semibold text-white/80 transition hover:bg-white/10">Demo beenden</button></div></section>';
+  }
+
+  function demoGateHTML() {
+    return '<div class="fixed inset-0 z-[180] flex items-center justify-center bg-slate-950/75 px-4 py-8 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Konto erforderlich">' +
+      '<section class="w-full max-w-md overflow-hidden rounded-[2rem] border border-white/15 bg-white p-6 text-slate-900 shadow-2xl sm:p-7">' +
+      '<div class="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">' + icon("lock-keyhole", "h-7 w-7") + '</div>' +
+      '<div class="text-xs font-bold uppercase tracking-[.16em] text-slate-500">Urlaubassistent</div>' +
+      '<h2 class="mt-2 text-2xl font-extrabold tracking-tight">Das gibt’s mit deinem Konto</h2>' +
+      '<p class="mt-3 text-sm leading-6 text-slate-600">' + esc(demoGateReason) + '</p>' +
+      '<div class="mt-6 space-y-2"><button type="button" data-action="demo-open-auth" data-mode="signup" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3.5 text-sm font-bold text-white transition hover:bg-slate-800">' + icon("user-round-plus", "h-4 w-4") + ' Kostenloses Konto erstellen</button>' +
+      '<button type="button" data-action="demo-open-auth" data-mode="signin" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50">' + icon("log-in", "h-4 w-4") + ' Ich habe bereits ein Konto</button></div>' +
+      '<button type="button" data-action="close-demo-gate" class="mt-4 w-full rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-900">Weiter in der Demo</button>' +
+      '</section></div>';
+  }
+
+  function toggleDemoList(kind, id) {
+    const trip = activeTrip();
+    if (!demoMode || !trip) return;
+    const list = kind === "pack" ? trip.packlist : trip.todos;
+    const item = list.find(row => row.id === id);
+    if (!item) return;
+    item.done = !item.done;
+    saveDemoTrips();
+    render();
   }
 
   function aiChatStorageKey() {
