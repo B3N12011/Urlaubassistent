@@ -52,7 +52,7 @@
       stroke-linejoin: round;
       stroke-dasharray: 1;
       stroke-dashoffset: 1;
-      animation: ua-hero-fuse-burn 8.2s cubic-bezier(.4,0,.25,1) infinite;
+      animation: none;
     }
     @keyframes ua-hero-fuse-burn {
       0%, 4% { stroke-dashoffset: 1; opacity: 0; }
@@ -6121,7 +6121,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=68").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=69").catch(() => {});
     }, { once: true });
   }
 
