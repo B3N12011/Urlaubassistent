@@ -427,6 +427,63 @@
     .ua-loader-orbit-bg-one { width: min(86vw, 430px); aspect-ratio: 1; top: -135px; right: -155px; }
     .ua-loader-orbit-bg-two { width: min(58vw, 285px); aspect-ratio: 1; top: -67px; right: -75px; border-color: rgba(226,232,240,.075); }
     .ua-loader-orbit-bg-three { width: min(100vw, 480px); aspect-ratio: 1; bottom: -330px; left: -240px; border-color: rgba(226,232,240,.055); }
+    /* Brief, screen-wide light streaks: ignite, sweep across, then fade away. */
+    .ua-loader-light-trails {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+      pointer-events: none;
+      contain: layout paint;
+    }
+    .ua-loader-light-streak {
+      position: absolute;
+      left: -20vw;
+      display: block;
+      width: 140vw;
+      height: 1.5px;
+      opacity: 0;
+      transform: translate3d(-115%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(.28);
+      transform-origin: center;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(96,165,250,.035) 12%,
+        rgba(96,165,250,.3) 27%,
+        rgba(191,219,254,.92) 43%,
+        rgba(255,255,255,1) 50%,
+        rgba(103,232,249,.88) 56%,
+        rgba(59,130,246,.25) 76%,
+        transparent 100%);
+      box-shadow: 0 0 8px rgba(125,211,252,.28);
+      filter: drop-shadow(0 0 4px rgba(96,165,250,.42));
+      animation: ua-loader-light-sweep 1850ms cubic-bezier(.16,.76,.24,1) var(--trail-delay, 0s) both;
+    }
+    .ua-loader-light-streak::after {
+      content: "";
+      position: absolute;
+      right: 12%;
+      top: -1px;
+      width: 10%;
+      height: 3px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.58);
+      filter: blur(2px);
+    }
+    .ua-loader-light-streak--1 { top: 9%; --trail-angle: -7deg; --trail-delay: 0ms; }
+    .ua-loader-light-streak--2 { top: 20%; --trail-angle: 4deg; --trail-delay: 110ms; }
+    .ua-loader-light-streak--3 { top: 31%; --trail-angle: -3deg; --trail-delay: 240ms; }
+    .ua-loader-light-streak--4 { top: 43%; --trail-angle: 7deg; --trail-delay: 70ms; }
+    .ua-loader-light-streak--5 { top: 55%; --trail-angle: -5deg; --trail-delay: 320ms; }
+    .ua-loader-light-streak--6 { top: 67%; --trail-angle: 3deg; --trail-delay: 170ms; }
+    .ua-loader-light-streak--7 { top: 79%; --trail-angle: -8deg; --trail-delay: 420ms; }
+    .ua-loader-light-streak--8 { top: 91%; --trail-angle: 5deg; --trail-delay: 260ms; }
+    @keyframes ua-loader-light-sweep {
+      0% { opacity: 0; transform: translate3d(-115%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(.24); }
+      12% { opacity: .88; transform: translate3d(-45%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(.94); }
+      30% { opacity: .68; transform: translate3d(-8%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(1); }
+      63% { opacity: .32; transform: translate3d(38%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(.82); }
+      100% { opacity: 0; transform: translate3d(115%, 0, 0) rotate(var(--trail-angle, 0deg)) scaleX(.36); }
+    }
     .ua-loader-center { position: relative; z-index: 2; display:flex; flex-direction:column; align-items:center; justify-content:center; }
     .ua-loader-icon-shell {
       position: relative; display:flex; align-items:center; justify-content:center;
@@ -464,7 +521,7 @@
       to { transform:rotate(342deg); }
     }
     @media (prefers-reduced-motion: reduce) {
-      .ua-loader-orbit-ring, .ua-loader-dots span { animation:none !important; }
+      .ua-loader-orbit-ring, .ua-loader-dots span, .ua-loader-light-streak { animation:none !important; }
     }
 </style>
 </head>
@@ -475,6 +532,7 @@
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>
+    <div class="ua-loader-light-trails" aria-hidden="true"><span class="ua-loader-light-streak ua-loader-light-streak--1"></span><span class="ua-loader-light-streak ua-loader-light-streak--2"></span><span class="ua-loader-light-streak ua-loader-light-streak--3"></span><span class="ua-loader-light-streak ua-loader-light-streak--4"></span><span class="ua-loader-light-streak ua-loader-light-streak--5"></span><span class="ua-loader-light-streak ua-loader-light-streak--6"></span><span class="ua-loader-light-streak ua-loader-light-streak--7"></span><span class="ua-loader-light-streak ua-loader-light-streak--8"></span></div>
     <div class="ua-loader-center">
       <div class="ua-loader-icon-shell">
         <span class="ua-loader-orbit-ring" aria-hidden="true"></span>
@@ -1189,6 +1247,7 @@
   function loadingHTML() {
     return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen">' +
       '<span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>' +
+      "<div class=\"ua-loader-light-trails\" aria-hidden=\"true\"><span class=\"ua-loader-light-streak ua-loader-light-streak--1\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--2\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--3\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--4\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--5\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--6\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--7\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--8\"></span></div>" +
       '<div class="ua-loader-center"><div class="ua-loader-icon-shell"><span class="ua-loader-orbit-ring" aria-hidden="true"></span><img src="./icon-192.png" alt="Urlaubassistent" width="88" height="88" class="ua-loader-logo" /></div>' +
       '<div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div></div></div>';
   }
@@ -5956,7 +6015,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=64").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=65").catch(() => {});
     }, { once: true });
   }
 
