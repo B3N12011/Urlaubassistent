@@ -40,6 +40,27 @@
     .ua-page-enter > .space-y-6 > *:nth-child(4) { animation-delay: 95ms; }
     .ua-page-enter > .space-y-6 > *:nth-child(5) { animation-delay: 125ms; }
     .ua-page-enter > .space-y-6 > *:nth-child(n+6) { animation-delay: 145ms; }
+    .ua-hero-fuse {
+      overflow: visible;
+      opacity: .9;
+    }
+    .ua-hero-fuse-thread {
+      fill: none;
+      stroke: url(#ua-hero-fuse-gradient);
+      stroke-width: 1.65;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: ua-hero-fuse-burn 8.2s cubic-bezier(.4,0,.25,1) infinite;
+    }
+    @keyframes ua-hero-fuse-burn {
+      0%, 4% { stroke-dashoffset: 1; opacity: 0; }
+      12% { opacity: .92; }
+      76% { stroke-dashoffset: .12; opacity: .68; }
+      91% { stroke-dashoffset: 0; opacity: .26; }
+      100% { stroke-dashoffset: 0; opacity: 0; }
+    }
     @keyframes ua-page-container-in {
       from { opacity: .35; transform: translate3d(0, 16px, 0) scale(.995); }
       to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
@@ -79,6 +100,7 @@
     @media (prefers-reduced-motion: reduce) {
       .ua-page-enter > .space-y-6 > *, .ua-modal-enter, .ua-modal-enter > div,
       .modal-backdrop, .modal-backdrop > div { animation: none !important; }
+      .ua-hero-fuse-thread { animation: none !important; stroke-dashoffset: 0; opacity: .32; }
       nav button, nav button span:first-child, button[data-action],
       main#ua-page-content section { transition: none !important; }
       .ua-nav-indicator-moving, .ua-nav-icon-pop, .ua-nav-label-pop, .ua-nav-indicator-moving::after { animation: none !important; }
@@ -1458,9 +1480,8 @@
     const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
     const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
     let html = '<section class="relative overflow-hidden rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl shadow-slate-950/15 md:p-7">';
-    html += '<div class="pointer-events-none absolute -right-8 -top-10 h-48 w-48 rounded-full border border-white/10"></div><div class="pointer-events-none absolute -right-1 top-0 h-36 w-36 rounded-full border border-white/10"></div>';
-    html += '';
-    html += '<div class="relative flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div class="min-w-0">';
+    html += '<svg class="ua-hero-fuse pointer-events-none absolute right-0 top-0 z-0 h-[250px] w-[330px] max-w-full" viewBox="0 0 330 250" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="235" y1="0" x2="245" y2="245" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".46"/><stop offset=".48" stop-color="#93C5FD" stop-opacity=".30"/><stop offset="1" stop-color="#93C5FD" stop-opacity="0"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="M 250 -8 C 251 12 226 25 207 47 C 187 70 201 92 225 88 C 248 84 259 61 280 68 C 305 76 309 101 292 118 C 275 135 251 129 237 149 C 221 170 239 192 261 185 C 283 178 304 190 300 212 C 296 232 275 239 259 225 C 244 212 225 226 233 244"/></svg>';
+    html += '<div class="relative z-10 flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div class="min-w-0">';
     html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
     html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
     html += '<p class="mt-2 flex items-center gap-2 text-sm text-white/80 md:text-base">' + icon("map-pin", "h-4 w-4 shrink-0") + ' ' + esc(trip.destination || "Ziel noch nicht eingetragen") + '</p>';
@@ -1468,7 +1489,7 @@
     html += '<div class="mt-5 flex flex-wrap gap-2"><button type="button" data-action="select-dashboard-trip" data-id="' + esc(trip.id) + '" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-100">' + icon("arrow-up-right", "h-4 w-4") + ' Reise öffnen</button>';
     html += '<button type="button" data-action="navigate" data-page="trips" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15">' + icon("map", "h-4 w-4") + ' Alle Urlaube</button></div></div>';
     html += '<div class="relative flex shrink-0 items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-sm sm:min-w-[155px] sm:flex-col sm:items-center sm:justify-center sm:gap-1 sm:py-5"><div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">' + icon(tripInProgress ? "sun" : "calendar-clock", "h-6 w-6") + '</div><div class="text-center"><div class="text-lg font-bold leading-tight">' + countdownNumber + '</div><div class="mt-1 text-xs leading-5 text-white/70">' + countdownSub + '</div></div></div></div>';
-    html += '<div class="relative mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"><div class="rounded-2xl border border-white/10 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/65">Bisher ausgegeben</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.total) + '</div></div>';
+    html += '<div class="relative z-10 mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3"><div class="rounded-2xl border border-white/10 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/65">Bisher ausgegeben</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.total) + '</div></div>';
     html += '<div class="rounded-2xl border border-white/10 bg-white/10 p-3.5"><div class="text-xs font-medium text-white/65">Restbudget</div><div class="mt-1 truncate text-lg font-bold">' + money(totalsData.remaining) + '</div></div>';
     html += '<div class="col-span-2 rounded-2xl border border-white/10 bg-white/10 p-3.5 sm:col-span-1"><div class="flex items-center justify-between text-xs font-medium text-white/75"><span>Budget genutzt</span><span>' + budgetPct + '%</span></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-white/15"><div class="h-full rounded-full ' + (totalsData.remaining >= 0 ? "bg-emerald-400" : "bg-rose-400") + '" style="width:' + budgetPct + '%"></div></div></div></div></section>';
     return html;
@@ -6015,7 +6036,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=65").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=66").catch(() => {});
     }, { once: true });
   }
 
