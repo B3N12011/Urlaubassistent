@@ -668,6 +668,53 @@
         animation: none !important; stroke-dashoffset: 0 !important; opacity: .2 !important;
       }
     }
+
+    /* Final linework behavior: draw the thread each time the relevant screen opens. */
+    .ua-page-enter .ua-hero-fuse-thread {
+      stroke-dasharray: 1 !important;
+      stroke-dashoffset: 1 !important;
+      opacity: 0 !important;
+      animation: ua-hero-fuse-draw 3.05s cubic-bezier(.18,.72,.25,1) both !important;
+    }
+    .ua-hero-fuse-thread {
+      stroke-dasharray: 1 !important;
+      stroke-dashoffset: 0 !important;
+      opacity: .22 !important;
+      animation: none !important;
+    }
+    @keyframes ua-hero-fuse-draw {
+      0% { stroke-dashoffset: 1; opacity: 0; }
+      13% { opacity: .18; }
+      42% { stroke-dashoffset: .56; opacity: .48; }
+      77% { stroke-dashoffset: .10; opacity: .34; }
+      100% { stroke-dashoffset: 0; opacity: .22; }
+    }
+
+    /* The loader's single long curved line builds from its first point instead of receding. */
+    .ua-loader-line {
+      stroke-width: 2.25 !important;
+      stroke-dasharray: 1 !important;
+      stroke-dashoffset: 1 !important;
+      opacity: 0 !important;
+      animation: ua-loader-line-build 2.72s cubic-bezier(.18,.72,.25,1) both !important;
+    }
+    @keyframes ua-loader-line-build {
+      0% { stroke-dashoffset: 1; opacity: 0; }
+      12% { opacity: .12; }
+      38% { stroke-dashoffset: .64; opacity: .36; }
+      78% { stroke-dashoffset: .08; opacity: .28; }
+      100% { stroke-dashoffset: 0; opacity: .20; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-page-enter .ua-hero-fuse-thread,
+      .ua-hero-fuse-thread,
+      .ua-loader-line {
+        animation: none !important;
+        stroke-dashoffset: 0 !important;
+        opacity: .20 !important;
+      }
+    }
+
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
@@ -1325,6 +1372,9 @@
       return;
     }
 
+    if (animateNextPage && activePage === "overview") {
+      heroFusePathIndex = Math.floor(Math.random() * HERO_FUSE_PATHS.length);
+    }
     root.innerHTML = appHTML() + pwaInstallButtonHTML();
     animateNextPage = false;
     navTransitionFromPage = null;
@@ -1591,6 +1641,16 @@
     '</div>';
   }
 
+  const HERO_FUSE_PATHS = [
+    "M 1030 -40 C 840 60 750 80 610 166 S 430 190 330 275 S 140 400 -40 350",
+    "M 1040 -25 C 920 35 835 120 700 150 C 570 180 585 250 460 275 S 270 260 235 360 S 75 430 -55 370",
+    "M 1040 5 C 900 110 730 40 640 145 C 565 235 450 190 360 295 C 250 425 140 340 -55 420",
+    "M 1035 -25 C 870 70 765 170 815 240 C 875 323 660 360 525 290 C 405 228 338 340 235 398 S 55 400 -50 325",
+    "M 1040 15 C 850 90 795 20 650 110 S 590 240 435 256 S 340 350 190 370 S 80 335 -40 405",
+    "M 1045 -30 C 830 90 845 160 680 205 S 500 145 420 280 S 225 385 -45 360"
+  ];
+  let heroFusePathIndex = 0;
+
   function dashboardHeroHTML(trip, totalsData, budgetPct, isUpcoming, days, tripInProgress) {
     if (!trip) {
       return '<section class="relative overflow-hidden rounded-[2rem] bg-slate-900 p-6 text-white shadow-lg md:p-8">' +
@@ -1603,7 +1663,7 @@
     const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
     const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
     let html = '<section class="relative overflow-hidden rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl shadow-slate-950/15 md:p-7">';
-    html += '<svg class="ua-hero-fuse pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 1000 650" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="0" y1="0" x2="1000" y2="650" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".04"/><stop offset=".28" stop-color="#93C5FD" stop-opacity=".35"/><stop offset=".54" stop-color="#F0F9FF" stop-opacity=".7"/><stop offset=".82" stop-color="#93C5FD" stop-opacity=".32"/><stop offset="1" stop-color="#93C5FD" stop-opacity=".04"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="M 1030 -40 C 840 60 750 80 610 166 S 430 190 330 275 S 140 400 -40 350"/></svg>';
+    html += '<svg class="ua-hero-fuse pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 1000 650" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="0" y1="0" x2="1000" y2="650" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".04"/><stop offset=".28" stop-color="#93C5FD" stop-opacity=".35"/><stop offset=".54" stop-color="#F0F9FF" stop-opacity=".7"/><stop offset=".82" stop-color="#93C5FD" stop-opacity=".32"/><stop offset="1" stop-color="#93C5FD" stop-opacity=".04"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="" + HERO_FUSE_PATHS[heroFusePathIndex] + "/></svg>';
     html += '<div class="relative z-10 flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div class="min-w-0">';
     html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
     html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
@@ -6160,7 +6220,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=71").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=72").catch(() => {});
     }, { once: true });
   }
 
