@@ -569,11 +569,11 @@
       stroke-dashoffset: 1;
       opacity: 0;
       filter: drop-shadow(0 0 2px rgba(96,165,250,.16));
-      animation: ua-loader-line-draw 3.15s cubic-bezier(.18,.72,.25,1) forwards;
+      animation: ua-loader-line-draw 2.45s cubic-bezier(.18,.72,.25,1) forwards;
     }
-    .ua-loader-line--2 { animation-delay: 160ms; opacity: 0; }
-    .ua-loader-line--3 { animation-delay: 320ms; opacity: 0; }
-    .ua-loader-line--4 { animation-delay: 240ms; }
+    .ua-loader-line--2 { animation-delay: 100ms; opacity: 0; }
+    .ua-loader-line--3 { animation-delay: 200ms; opacity: 0; }
+    .ua-loader-line--4 { animation-delay: 150ms; }
     @keyframes ua-loader-line-draw {
       0% { stroke-dashoffset: 1; opacity: 0; }
       22% { opacity: .58; }
@@ -606,12 +606,17 @@
       stroke-linecap: round;
       stroke-linejoin: round;
       stroke-dasharray: 1;
+      stroke-dashoffset: 0;
+      opacity: .10;
+      animation: none !important;
+    }
+    .ua-page-enter .ua-hero-fuse-thread {
       stroke-dashoffset: 1;
       opacity: 0;
-      animation: ua-hero-fuse-burn 3.4s cubic-bezier(.18,.72,.25,1) forwards !important;
+      animation: ua-hero-fuse-burn 2.65s cubic-bezier(.18,.72,.25,1) forwards !important;
     }
-    .ua-hero-fuse-thread--2 { animation-delay: 140ms !important; }
-    .ua-hero-fuse-thread--3 { animation-delay: 280ms !important; }
+    .ua-page-enter .ua-hero-fuse-thread--2 { animation-delay: 100ms !important; }
+    .ua-page-enter .ua-hero-fuse-thread--3 { animation-delay: 200ms !important; }
     @keyframes ua-hero-fuse-burn {
       0% { stroke-dashoffset: 1; opacity: 0; }
       18% { opacity: .42; }
@@ -6116,7 +6121,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=67").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=68").catch(() => {});
     }, { once: true });
   }
 
