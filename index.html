@@ -545,6 +545,86 @@
     @media (prefers-reduced-motion: reduce) {
       .ua-loader-orbit-ring, .ua-loader-dots span, .ua-loader-light-streak { animation:none !important; }
     }
+
+    /* Loading screen: elegant lines draw once across the full display, not just in a corner. */
+    .ua-loading-screen .ua-loader-light-trails { display: none !important; }
+    .ua-loading-screen .ua-loader-linework {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+      contain: paint;
+    }
+    .ua-loader-line {
+      fill: none;
+      stroke: url(#ua-loader-line-gradient);
+      stroke-width: 1.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      opacity: 0;
+      filter: drop-shadow(0 0 2px rgba(96,165,250,.16));
+      animation: ua-loader-line-draw 3.15s cubic-bezier(.18,.72,.25,1) forwards;
+    }
+    .ua-loader-line--2 { animation-delay: 160ms; opacity: 0; }
+    .ua-loader-line--3 { animation-delay: 320ms; opacity: 0; }
+    .ua-loader-line--4 { animation-delay: 240ms; }
+    @keyframes ua-loader-line-draw {
+      0% { stroke-dashoffset: 1; opacity: 0; }
+      22% { opacity: .58; }
+      64% { stroke-dashoffset: .12; opacity: .30; }
+      82% { stroke-dashoffset: 0; opacity: .18; }
+      100% { stroke-dashoffset: 0; opacity: .11; }
+    }
+    .ua-loader-orbit-ring {
+      animation: ua-loader-ring-appear 1.1s cubic-bezier(.2,.75,.25,1) both !important;
+    }
+    .ua-loader-orbit-ring::after { display: none !important; }
+    @keyframes ua-loader-ring-appear {
+      from { opacity: 0; transform: scale(.88); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* On the travel card, the linework now crosses the whole card and animates once on entry. */
+    .ua-hero-fuse {
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      max-width: none !important;
+      overflow: hidden !important;
+      opacity: .82;
+    }
+    .ua-hero-fuse-thread {
+      fill: none;
+      stroke: url(#ua-hero-fuse-gradient);
+      stroke-width: 1.65;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      opacity: 0;
+      animation: ua-hero-fuse-burn 3.4s cubic-bezier(.18,.72,.25,1) forwards !important;
+    }
+    .ua-hero-fuse-thread--2 { animation-delay: 140ms !important; }
+    .ua-hero-fuse-thread--3 { animation-delay: 280ms !important; }
+    @keyframes ua-hero-fuse-burn {
+      0% { stroke-dashoffset: 1; opacity: 0; }
+      18% { opacity: .42; }
+      70% { stroke-dashoffset: .08; opacity: .25; }
+      100% { stroke-dashoffset: 0; opacity: .10; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-loader-line, .ua-loader-orbit-ring, .ua-hero-fuse-thread {
+        animation: none !important;
+        stroke-dashoffset: 0;
+        opacity: .14;
+      }
+    }
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
@@ -554,7 +634,7 @@
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>
-    <div class="ua-loader-light-trails" aria-hidden="true"><span class="ua-loader-light-streak ua-loader-light-streak--1"></span><span class="ua-loader-light-streak ua-loader-light-streak--2"></span><span class="ua-loader-light-streak ua-loader-light-streak--3"></span><span class="ua-loader-light-streak ua-loader-light-streak--4"></span><span class="ua-loader-light-streak ua-loader-light-streak--5"></span><span class="ua-loader-light-streak ua-loader-light-streak--6"></span><span class="ua-loader-light-streak ua-loader-light-streak--7"></span><span class="ua-loader-light-streak ua-loader-light-streak--8"></span></div>
+    <svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".48"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".82"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".4"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -60 175 C 95 95 165 255 250 205 S 365 100 490 195"/><path class="ua-loader-line ua-loader-line--2" pathLength="1" d="M -65 425 C 70 335 150 520 250 475 S 360 360 490 485"/><path class="ua-loader-line ua-loader-line--3" pathLength="1" d="M -70 725 C 90 650 175 800 270 755 S 375 680 500 770"/><path class="ua-loader-line ua-loader-line--4" pathLength="1" d="M 330 -40 C 220 95 330 225 390 325 S 435 470 320 565"/></svg>
     <div class="ua-loader-center">
       <div class="ua-loader-icon-shell">
         <span class="ua-loader-orbit-ring" aria-hidden="true"></span>
@@ -1269,7 +1349,7 @@
   function loadingHTML() {
     return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen">' +
       '<span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>' +
-      "<div class=\"ua-loader-light-trails\" aria-hidden=\"true\"><span class=\"ua-loader-light-streak ua-loader-light-streak--1\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--2\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--3\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--4\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--5\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--6\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--7\"></span><span class=\"ua-loader-light-streak ua-loader-light-streak--8\"></span></div>" +
+      '<svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".48"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".82"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".4"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -60 175 C 95 95 165 255 250 205 S 365 100 490 195"/><path class="ua-loader-line ua-loader-line--2" pathLength="1" d="M -65 425 C 70 335 150 520 250 475 S 360 360 490 485"/><path class="ua-loader-line ua-loader-line--3" pathLength="1" d="M -70 725 C 90 650 175 800 270 755 S 375 680 500 770"/><path class="ua-loader-line ua-loader-line--4" pathLength="1" d="M 330 -40 C 220 95 330 225 390 325 S 435 470 320 565"/></svg>' +
       '<div class="ua-loader-center"><div class="ua-loader-icon-shell"><span class="ua-loader-orbit-ring" aria-hidden="true"></span><img src="./icon-192.png" alt="Urlaubassistent" width="88" height="88" class="ua-loader-logo" /></div>' +
       '<div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div></div></div>';
   }
@@ -1480,7 +1560,7 @@
     const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
     const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
     let html = '<section class="relative overflow-hidden rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl shadow-slate-950/15 md:p-7">';
-    html += '<svg class="ua-hero-fuse pointer-events-none absolute right-0 top-0 z-0 h-[250px] w-[330px] max-w-full" viewBox="0 0 330 250" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="235" y1="0" x2="245" y2="245" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".46"/><stop offset=".48" stop-color="#93C5FD" stop-opacity=".30"/><stop offset="1" stop-color="#93C5FD" stop-opacity="0"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="M 250 -8 C 251 12 226 25 207 47 C 187 70 201 92 225 88 C 248 84 259 61 280 68 C 305 76 309 101 292 118 C 275 135 251 129 237 149 C 221 170 239 192 261 185 C 283 178 304 190 300 212 C 296 232 275 239 259 225 C 244 212 225 226 233 244"/></svg>';
+    html += '<svg class="ua-hero-fuse pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 1000 650" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="0" y1="0" x2="1000" y2="650" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".02"/><stop offset=".28" stop-color="#93C5FD" stop-opacity=".20"/><stop offset=".54" stop-color="#E2E8F0" stop-opacity=".34"/><stop offset=".82" stop-color="#93C5FD" stop-opacity=".18"/><stop offset="1" stop-color="#93C5FD" stop-opacity=".01"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="M 1030 -40 C 840 60 750 80 610 166 S 430 190 330 275 S 140 400 -40 350"/><path class="ua-hero-fuse-thread ua-hero-fuse-thread--2" pathLength="1" d="M -50 540 C 140 410 280 625 475 520 S 810 360 1050 500"/><path class="ua-hero-fuse-thread ua-hero-fuse-thread--3" pathLength="1" d="M 760 -35 C 610 85 700 205 850 295 S 1020 430 900 610"/></svg>';
     html += '<div class="relative z-10 flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div class="min-w-0">';
     html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
     html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
@@ -6036,7 +6116,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=66").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=67").catch(() => {});
     }, { once: true });
   }
 
