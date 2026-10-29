@@ -631,31 +631,6 @@
       }
     }
 
-    /* Persistent route line from the Home vacation card through the overview. */
-    .ua-home-dashboard { position: relative; isolation: isolate; }
-    .ua-home-route-linework {
-      position: absolute; inset: 0; z-index: 0; display: block; width: 100%; height: 100%;
-      overflow: visible; pointer-events: none; contain: paint;
-    }
-    .ua-home-route-thread {
-      fill: none; stroke: url(#ua-home-route-gradient); stroke-width: 3.6;
-      stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1;
-      stroke-dashoffset: 0; opacity: .30;
-      filter: drop-shadow(0 0 1px rgba(71,85,105,.08));
-    }
-    .ua-page-enter .ua-home-route-thread {
-      stroke-dashoffset: 1; opacity: 0;
-      animation: ua-home-route-draw 2.1s cubic-bezier(.18,.72,.25,1) forwards !important;
-    }
-    .ua-page-enter .ua-home-route-linework { animation: none !important; }
-    .ua-home-dashboard > *:not(.ua-home-route-linework) { position: relative; z-index: 1; }
-    @keyframes ua-home-route-draw {
-      0% { stroke-dashoffset: 1; opacity: 0; }
-      18% { opacity: .48; }
-      72% { stroke-dashoffset: .08; opacity: .38; }
-      100% { stroke-dashoffset: 0; opacity: .30; }
-    }
-
     /* One slightly thicker thread remains on the vacation card after drawing. */
     .ua-hero-fuse { overflow: hidden !important; opacity: 1 !important; }
     .ua-hero-fuse-thread {
@@ -686,7 +661,7 @@
       100% { stroke-dashoffset: 1; opacity: 0; }
     }
     @media (prefers-reduced-motion: reduce) {
-      .ua-home-route-thread, .ua-hero-fuse-thread {
+      .ua-hero-fuse-thread {
         animation: none !important; stroke-dashoffset: 0 !important; opacity: .26 !important;
       }
       .ua-loader-line {
@@ -702,7 +677,7 @@
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>
-    <svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -60 175 C 95 95 165 255 250 205 S 365 100 490 195"/></svg>
+    <svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -65 18 C 115 22 345 82 492 164 S 80 250 218 329 S 475 420 238 508 S 18 602 194 690 S 382 783 228 852 S 115 892 500 930"/></svg>
     <div class="ua-loader-center">
       <div class="ua-loader-icon-shell">
         <span class="ua-loader-orbit-ring" aria-hidden="true"></span>
@@ -1417,7 +1392,7 @@
   function loadingHTML() {
     return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen">' +
       '<span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>' +
-      '<svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -60 175 C 95 95 165 255 250 205 S 365 100 490 195"/></svg>' +
+      '<svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -65 18 C 115 22 345 82 492 164 S 80 250 218 329 S 475 420 238 508 S 18 602 194 690 S 382 783 228 852 S 115 892 500 930"/></svg>' +
       '<div class="ua-loader-center"><div class="ua-loader-icon-shell"><span class="ua-loader-orbit-ring" aria-hidden="true"></span><img src="./icon-192.png" alt="Urlaubassistent" width="88" height="88" class="ua-loader-logo" /></div>' +
       '<div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div></div></div>';
   }
@@ -1675,8 +1650,8 @@
     const dayTotal = day.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
     const days = trip ? daysUntil(trip.startDate) : null;
     const tripInProgress = Boolean(trip?.startDate && trip?.endDate && trip.startDate <= today && trip.endDate >= today);
-    return `<div class="ua-home-dashboard relative space-y-6">
-      <svg class="ua-home-route-linework" viewBox="0 0 100 1000" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-home-route-gradient" x1="0" y1="0" x2="100" y2="1000" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#94A3B8" stop-opacity=".04"/><stop offset=".18" stop-color="#64748B" stop-opacity=".42"/><stop offset=".52" stop-color="#94A3B8" stop-opacity=".32"/><stop offset=".82" stop-color="#64748B" stop-opacity=".38"/><stop offset="1" stop-color="#94A3B8" stop-opacity=".08"/></linearGradient></defs><path class="ua-home-route-thread" pathLength="1" d="M 50 0 C 31 55 69 85 50 145 S 31 230 50 290 S 69 375 50 435 S 31 520 50 580 S 69 665 50 725 S 31 810 50 870 S 43 955 50 1000"/></svg>
+    return `<div class="relative space-y-6">
+      
       ${dashboardHeroHTML(trip, totalsData, budgetPct, isUpcoming, days, tripInProgress)}
 
       ${dashboardProgressHTML(trip)}
@@ -6185,7 +6160,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=70").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=71").catch(() => {});
     }, { once: true });
   }
 
