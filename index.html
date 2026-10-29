@@ -787,7 +787,7 @@
   let acceptedCookies = true;
   let recovery = false;
   const splashStartedAt = Date.now();
-  const MIN_SPLASH_MS = 2600;
+  const MIN_SPLASH_MS = 3000;
   let checking = true;
   let offline = !navigator.onLine;
   let offlineCacheLoaded = false;
@@ -6220,7 +6220,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=72").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=73").catch(() => {});
     }, { once: true });
   }
 
