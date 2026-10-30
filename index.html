@@ -54,6 +54,26 @@
       stroke-dashoffset: 1;
       animation: none;
     }
+    .ua-hero-aircraft {
+      opacity: 0;
+      filter: drop-shadow(0 0 3px rgba(147,197,253,.95)) drop-shadow(0 0 8px rgba(96,165,250,.75));
+      pointer-events: none;
+    }
+    .ua-page-enter .ua-hero-aircraft {
+      opacity: 1;
+      animation: ua-hero-aircraft-arrive 3.05s ease-out both;
+    }
+    .ua-hero-aircraft path {
+      fill: #f8fafc;
+      stroke: #bfdbfe;
+      stroke-width: 1.1;
+      stroke-linejoin: round;
+    }
+    @keyframes ua-hero-aircraft-arrive {
+      0%, 5% { opacity: 0; }
+      14%, 82% { opacity: 1; }
+      100% { opacity: .94; }
+    }
     @keyframes ua-hero-fuse-burn {
       0%, 4% { stroke-dashoffset: 1; opacity: 0; }
       12% { opacity: .92; }
@@ -742,6 +762,7 @@
         stroke-dashoffset: 0 !important;
         opacity: .20 !important;
       }
+      .ua-hero-aircraft { display: none !important; }
     }
 
 </style>
@@ -1694,7 +1715,7 @@
     const countdownNumber = tripInProgress ? "Mittendrin!" : days === 0 ? "Heute!" : days !== null && days > 0 ? String(days) : "Abgeschlossen";
     const countdownSub = tripInProgress ? "Genieß die Reise" : days === 0 ? "Dein Urlaub beginnt" : days !== null && days > 0 ? (days === 1 ? "Tag bis zur Abreise" : "Tage bis zur Abreise") : "Schön war's!";
     let html = '<section class="relative overflow-hidden rounded-[2rem] bg-slate-900 p-5 text-white shadow-xl shadow-slate-950/15 md:p-7">';
-    html += '<svg class="ua-hero-fuse pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 1000 650" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="0" y1="0" x2="1000" y2="650" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".04"/><stop offset=".28" stop-color="#93C5FD" stop-opacity=".35"/><stop offset=".54" stop-color="#F0F9FF" stop-opacity=".7"/><stop offset=".82" stop-color="#93C5FD" stop-opacity=".32"/><stop offset="1" stop-color="#93C5FD" stop-opacity=".04"/></linearGradient></defs><path class="ua-hero-fuse-thread" pathLength="1" d="' + HERO_FUSE_PATHS[heroFusePathIndex] + '"/></svg>';
+    html += '<svg class="ua-hero-fuse pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox="0 0 1000 650" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-hero-fuse-gradient" x1="0" y1="0" x2="1000" y2="650" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#CBD5E1" stop-opacity=".04"/><stop offset=".28" stop-color="#93C5FD" stop-opacity=".35"/><stop offset=".54" stop-color="#F0F9FF" stop-opacity=".7"/><stop offset=".82" stop-color="#93C5FD" stop-opacity=".32"/><stop offset="1" stop-color="#93C5FD" stop-opacity=".04"/></linearGradient></defs><path id="ua-hero-fuse-path" class="ua-hero-fuse-thread" pathLength="1" d="' + HERO_FUSE_PATHS[heroFusePathIndex] + '"/><g class="ua-hero-aircraft"><animateMotion dur="3.05s" fill="freeze" rotate="auto" calcMode="paced"><mpath href="#ua-hero-fuse-path"/></animateMotion><g transform="scale(1.18)"><path d="M 18 0 L -3.5 -3.6 L -1.5 -0.65 L -11 -5.4 L -9 -0.45 L -14 0 L -9 .45 L -11 5.4 L -1.5 .65 L -3.5 3.6 Z"/></g></g></svg>';
     html += '<div class="relative z-10 flex flex-col gap-5 md:flex-row md:items-start md:justify-between"><div class="min-w-0">';
     html += '<div class="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/85">' + icon("plane", "h-3.5 w-3.5") + ' ' + (isUpcoming ? "DEIN NÄCHSTES ABENTEUER" : "DEIN URLAUBSÜBERBLICK") + '</div>';
     html += '<h2 class="text-2xl font-bold tracking-tight md:text-4xl">' + esc(trip.name) + '</h2>';
@@ -6251,7 +6272,7 @@
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./service-worker.js?v=74").catch(() => {});
+      navigator.serviceWorker.register("./service-worker.js?v=75").catch(() => {});
     }, { once: true });
   }
 
