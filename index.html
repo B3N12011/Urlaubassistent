@@ -765,6 +765,35 @@
       .ua-hero-aircraft { display: none !important; }
     }
 
+
+    /* One aircraft wanders across the screen with a fine, non-glowing white trail. */
+    .ua-loader-flight-stage {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .ua-loader-flight-trail {
+      fill: none;
+      stroke: rgba(255,255,255,.72);
+      stroke-width: 1.15;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-dasharray: .028 .972;
+      stroke-dashoffset: .028;
+      filter: none !important;
+    }
+    .ua-loader-flight-aircraft {
+      filter: none !important;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .ua-loader-flight-stage { display: none !important; }
+    }
+
 </style>
 </head>
 <body class="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-50 text-slate-900">
@@ -774,8 +803,8 @@
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span>
     <span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>
-    <svg class="ua-loader-flight-orbit" viewBox="0 0 430 430" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-flight-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67E8F9" stop-opacity="0"/><stop offset=".48" stop-color="#BFDBFE" stop-opacity=".95"/><stop offset="1" stop-color="#60A5FA" stop-opacity=".12"/></linearGradient></defs><path id="ua-loader-flight-path" pathLength="1" d="M 5 215 A 210 210 0 0 0 215 425 A 210 210 0 0 0 425 215 A 210 210 0 0 0 215 5 A 210 210 0 0 0 5 215"/><path class="ua-loader-flight-trail" pathLength="1" d="M 5 215 A 210 210 0 0 0 215 425 A 210 210 0 0 0 425 215 A 210 210 0 0 0 215 5 A 210 210 0 0 0 5 215"><animate attributeName="stroke-dashoffset" from="0" to="-1" dur="7.2s" repeatCount="indefinite"/></path><g class="ua-loader-flight-aircraft"><animateMotion dur="7.2s" repeatCount="indefinite" rotate="auto" calcMode="linear"><mpath href="#ua-loader-flight-path"/></animateMotion><g transform="translate(-12 -12) rotate(78 12 12)"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 21 4s-2 0-3.5 1.5L14 9l-8.2-1.8c-.5-.1-1 .1-1.3.5l-.8.8c-.4.4-.3 1.1.2 1.4L9 13l-2 3H4l-1 1 4 2 2 4 1-1v-3l3-2 3.1 5.1c.3.5 1 .6 1.4.2l.8-.8c.4-.3.6-.8.5-1.3z" fill="#F8FAFC" stroke="#BFDBFE" stroke-width=".7" stroke-linejoin="round"/></g></g></svg>
-    <svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -65 18 C 115 22 345 82 492 164 S 80 250 218 329 S 475 420 238 508 S 18 602 194 690 S 382 783 228 852 S 115 892 500 930"/></svg>
+    <svg class="ua-loader-flight-stage" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><path id="ua-loader-flight-path" d="M 460 82 C 390 125 354 222 270 196 C 199 174 176 90 104 145 C 26 206 49 295 137 303 C 235 311 344 243 397 326 C 447 405 376 489 276 479 C 177 468 81 393 28 471 C -25 550 55 638 153 637 C 251 635 340 552 410 622 C 485 698 402 800 305 789 C 208 778 144 695 67 742 C 14 774 8 844 -25 930"/><path class="ua-loader-flight-trail" pathLength="1" d="M 460 82 C 390 125 354 222 270 196 C 199 174 176 90 104 145 C 26 206 49 295 137 303 C 235 311 344 243 397 326 C 447 405 376 489 276 479 C 177 468 81 393 28 471 C -25 550 55 638 153 637 C 251 635 340 552 410 622 C 485 698 402 800 305 789 C 208 778 144 695 67 742 C 14 774 8 844 -25 930"><animate attributeName="stroke-dashoffset" from=".028" to="-.972" dur="15s" repeatCount="indefinite"/></path><g class="ua-loader-flight-aircraft"><animateMotion dur="15s" repeatCount="indefinite" rotate="auto" calcMode="linear"><mpath href="#ua-loader-flight-path"/></animateMotion><g transform="translate(-12 -12)"><path d="M22 12 13.5 9.8 8.5 2.8H6.4L8.1 10.8 2.2 11.4V12.6L8.1 13.2 6.4 21.2H8.5L13.5 14.2Z" fill="#fff"/></g></g></svg>
+    
     <div class="ua-loader-center">
       <div class="ua-loader-icon-shell">
         <span class="ua-loader-orbit-ring" aria-hidden="true"></span>
@@ -1493,8 +1522,8 @@
   function loadingHTML() {
     return '<div class="ua-status-screen ua-loading-screen fixed inset-0 z-[200] flex min-h-screen items-center justify-center overflow-hidden px-6" role="status" aria-label="Urlaubassistent wird geladen">' +
       '<span class="ua-loader-orbit-bg ua-loader-orbit-bg-one" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-two" aria-hidden="true"></span><span class="ua-loader-orbit-bg ua-loader-orbit-bg-three" aria-hidden="true"></span>' +
-      '<svg class="ua-loader-flight-orbit" viewBox="0 0 430 430" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-flight-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#67E8F9" stop-opacity="0"/><stop offset=".48" stop-color="#BFDBFE" stop-opacity=".95"/><stop offset="1" stop-color="#60A5FA" stop-opacity=".12"/></linearGradient></defs><path id="ua-loader-flight-path" pathLength="1" d="M 5 215 A 210 210 0 0 0 215 425 A 210 210 0 0 0 425 215 A 210 210 0 0 0 215 5 A 210 210 0 0 0 5 215"/><path class="ua-loader-flight-trail" pathLength="1" d="M 5 215 A 210 210 0 0 0 215 425 A 210 210 0 0 0 425 215 A 210 210 0 0 0 215 5 A 210 210 0 0 0 5 215"><animate attributeName="stroke-dashoffset" from="0" to="-1" dur="7.2s" repeatCount="indefinite"/></path><g class="ua-loader-flight-aircraft"><animateMotion dur="7.2s" repeatCount="indefinite" rotate="auto" calcMode="linear"><mpath href="#ua-loader-flight-path"/></animateMotion><g transform="translate(-12 -12) rotate(78 12 12)"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 21 4s-2 0-3.5 1.5L14 9l-8.2-1.8c-.5-.1-1 .1-1.3.5l-.8.8c-.4.4-.3 1.1.2 1.4L9 13l-2 3H4l-1 1 4 2 2 4 1-1v-3l3-2 3.1 5.1c.3.5 1 .6 1.4.2l.8-.8c.4-.3.6-.8.5-1.3z" fill="#F8FAFC" stroke="#BFDBFE" stroke-width=".7" stroke-linejoin="round"/></g></g></svg>' +
-      '<svg class="ua-loader-linework" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><defs><linearGradient id="ua-loader-line-gradient" x1="0" y1="0" x2="430" y2="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60A5FA" stop-opacity="0"/><stop offset=".25" stop-color="#93C5FD" stop-opacity=".58"/><stop offset=".5" stop-color="#F0F9FF" stop-opacity=".9"/><stop offset=".7" stop-color="#67E8F9" stop-opacity=".5"/><stop offset="1" stop-color="#60A5FA" stop-opacity="0"/></linearGradient></defs><path class="ua-loader-line" pathLength="1" d="M -65 18 C 115 22 345 82 492 164 S 80 250 218 329 S 475 420 238 508 S 18 602 194 690 S 382 783 228 852 S 115 892 500 930"/></svg>' +
+      '<svg class="ua-loader-flight-stage" viewBox="0 0 430 900" preserveAspectRatio="none" fill="none" aria-hidden="true" focusable="false"><path id="ua-loader-flight-path" d="M 460 82 C 390 125 354 222 270 196 C 199 174 176 90 104 145 C 26 206 49 295 137 303 C 235 311 344 243 397 326 C 447 405 376 489 276 479 C 177 468 81 393 28 471 C -25 550 55 638 153 637 C 251 635 340 552 410 622 C 485 698 402 800 305 789 C 208 778 144 695 67 742 C 14 774 8 844 -25 930"/><path class="ua-loader-flight-trail" pathLength="1" d="M 460 82 C 390 125 354 222 270 196 C 199 174 176 90 104 145 C 26 206 49 295 137 303 C 235 311 344 243 397 326 C 447 405 376 489 276 479 C 177 468 81 393 28 471 C -25 550 55 638 153 637 C 251 635 340 552 410 622 C 485 698 402 800 305 789 C 208 778 144 695 67 742 C 14 774 8 844 -25 930"><animate attributeName="stroke-dashoffset" from=".028" to="-.972" dur="15s" repeatCount="indefinite"/></path><g class="ua-loader-flight-aircraft"><animateMotion dur="15s" repeatCount="indefinite" rotate="auto" calcMode="linear"><mpath href="#ua-loader-flight-path"/></animateMotion><g transform="translate(-12 -12)"><path d="M22 12 13.5 9.8 8.5 2.8H6.4L8.1 10.8 2.2 11.4V12.6L8.1 13.2 6.4 21.2H8.5L13.5 14.2Z" fill="#fff"/></g></g></svg>' +
+      '' +
       '<div class="ua-loader-center"><div class="ua-loader-icon-shell"><span class="ua-loader-orbit-ring" aria-hidden="true"></span><img src="./icon-192.png" alt="Urlaubassistent" width="88" height="88" class="ua-loader-logo" /></div>' +
       '<div class="ua-loader-dots" aria-hidden="true"><span></span><span></span><span></span></div></div></div>';
   }
